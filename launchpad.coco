@@ -1,28 +1,65 @@
+import datetime
 import mido
 import thespian.actors
 import time
 
 
+class SubscriptionManager(object):
 
-class Input(thespian.actors.Actor):
-
-    def init(self, port='Launchpad MK2 MIDI 1'):
-        self._port = mido.open_input('Launchpad MK2 MIDI 1')
+    def __init__(self, send_func):
         self.subscribers = []
+        self.send_func = send_func
+
+    def new(self, subscriber):
+        self.subscribers.append(subscriber)
+
+    def send_message(self, message):
+        for subscriber in self.subscribers:
+            self.send_func(subscriber, message)
+
+
+class MidiInput(thespian.actors.Actor):
+
+    def init(self):
+        self._port = mido.open_input('Launchpad MK2 MIDI 1')
+        self.subscriptions = SubscriptionManager(send_func=self.send)
+        self.wakeupAfter(datetime.timedelta(milliseconds=100))
 
     def next(self):
-        midi_message = next(iter(self._port))
-        for subscriber in self.subscribers:
-            self.send(subscriber, midi_message)
+        midi_message = self._port.poll()
+        if midi_message is not None:
+            self.subscriptions.send_message(('midi-input-event', midi_message))
+        self.wakeupAfter(datetime.timedelta(milliseconds=100))
         
     def receiveMessage(self, message, sender):
         match ('subscribe', subscriber) in message:
-            self.subscribers.append(subscriber)
-        match 'init' in message:
+            self.subscriptions.new(subscriber)
+        else: match 'init' in message:
             self.init()
-        match 'next' in message:
+        else: if isinstance(message, thespian.actors.WakeupMessage):
             self.next()
 
+
+
+class ButtonPressInterpreter(thespian.actors.Actor):
+
+    def init(self):
+        self.subscriptions = SubscriptionManager(send_func=self.send)
+
+    def receiveMessage(self, message, sender):
+        match 'init' in message:
+            self.init()
+        match ('subscribe', subscriber) in message:
+            self.subscriptions.new(subscriber)
+        match ('midi-input-event', event) in message:
+            column, row = event.note % 10 - 1, event.note // 10 - 1
+            if event.velocity:
+                event_type = 'lp-button-down'
+            else:
+                event_type = 'lp-button-up'
+
+            self.subscriptions.send_message((event_type, row, column))
+            
 
 class MessagePrinter(thespian.actors.Actor):
 
@@ -32,14 +69,22 @@ class MessagePrinter(thespian.actors.Actor):
 
 def run(systembase=None):
     system = thespian.actors.ActorSystem(systembase)
-    input_actor = system.createActor(Input)
+    input_actor = system.createActor(MidiInput)
     print_actor = system.createActor(MessagePrinter)
+    button_press_interpreter = system.createActor(ButtonPressInterpreter)
 
     system.tell(input_actor, 'init')
-    system.tell(input_actor, ('subscribe', print_actor))
-    for _ in range(6):
-        system.tell(input_actor, 'next')
-        time.sleep(0.001)
+    system.tell(button_press_interpreter, 'init')
+    system.tell(input_actor, ('subscribe', button_press_interpreter))
+    system.tell(button_press_interpreter, ('subscribe', print_actor))
+
+    system.tell(input_actor, 'start')
+
+    for _ in range(999):
+        # How do I keep messages flowing without doing this?
+        system.tell(input_actor, 'nop')
+        time.sleep(.01)
+
     system.shutdown()
 
 
