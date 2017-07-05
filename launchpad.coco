@@ -40,7 +40,7 @@ class MidiInput(thespian.actors.Actor):
 
         match ('subscribe', subscriber) in message:
             self.subscriptions.new(subscriber)
-        match message is thespian.actors.WakeupMessage in message:
+        if message `isinstance` thespian.actors.WakeupMessage:
             self.next()
 
 
