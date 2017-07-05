@@ -19,8 +19,11 @@ class SubscriptionManager(object):
 
 
 class MidiInput(thespian.actors.Actor):
+    
+    initialized = False
 
     def init(self):
+        self.initialized = True
         self._port = mido.open_input('Launchpad MK2 MIDI 1')
         self.subscriptions = SubscriptionManager(send_func=self.send)
         self.wakeupAfter(datetime.timedelta(milliseconds=100))
@@ -32,23 +35,27 @@ class MidiInput(thespian.actors.Actor):
         self.wakeupAfter(datetime.timedelta(milliseconds=100))
         
     def receiveMessage(self, message, sender):
+        if not self.initialized:
+            self.init()
+
         match ('subscribe', subscriber) in message:
             self.subscriptions.new(subscriber)
-        else: match 'init' in message:
-            self.init()
         else: if isinstance(message, thespian.actors.WakeupMessage):
             self.next()
 
 
 
 class ButtonPressInterpreter(thespian.actors.Actor):
+    initialized = False
 
     def init(self):
+        self.initialized = True
         self.subscriptions = SubscriptionManager(send_func=self.send)
 
     def receiveMessage(self, message, sender):
-        match 'init' in message:
+        if not self.initialized:
             self.init()
+
         match ('subscribe', subscriber) in message:
             self.subscriptions.new(subscriber)
         match ('midi-input-event', event) in message:
@@ -73,8 +80,8 @@ def run(systembase=None):
     print_actor = system.createActor(MessagePrinter)
     button_press_interpreter = system.createActor(ButtonPressInterpreter)
 
-    system.tell(input_actor, 'init')
-    system.tell(button_press_interpreter, 'init')
+    #system.tell(input_actor, 'init')
+    #system.tell(button_press_interpreter, 'init')
     system.tell(input_actor, ('subscribe', button_press_interpreter))
     system.tell(button_press_interpreter, ('subscribe', print_actor))
 
