@@ -38,10 +38,11 @@ class MidiInput(thespian.actors.Actor):
         if not self.initialized:
             self.init()
 
-        match ('subscribe', subscriber) in message:
-            self.subscriptions.new(subscriber)
-        if message `isinstance` thespian.actors.WakeupMessage:
-            self.next()
+        case message:
+            match ('subscribe', subscriber):
+                self.subscriptions.new(subscriber)
+            match message is thespian.actors.WakeupMessage:
+                self.next()
 
 
 
@@ -56,16 +57,17 @@ class ButtonPressInterpreter(thespian.actors.Actor):
         if not self.initialized:
             self.init()
 
-        match ('subscribe', subscriber) in message:
-            self.subscriptions.new(subscriber)
-        match ('midi-input-event', event) in message:
-            column, row = event.note % 10 - 1, event.note // 10 - 1
-            if event.velocity:
-                event_type = 'lp-button-down'
-            else:
-                event_type = 'lp-button-up'
+        case message:
+            match ('subscribe', subscriber):
+                self.subscriptions.new(subscriber)
+            match ('midi-input-event', event):
+                column, row = event.note % 10 - 1, event.note // 10 - 1
+                if event.velocity:
+                    event_type = 'lp-button-down'
+                else:
+                    event_type = 'lp-button-up'
 
-            self.subscriptions.send_message((event_type, row, column))
+                self.subscriptions.send_message((event_type, row, column))
             
 
 class MessagePrinter(thespian.actors.Actor):
