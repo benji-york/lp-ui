@@ -76,20 +76,16 @@ class MessagePrinter(thespian.actors.Actor):
 
 def run(systembase=None):
     system = thespian.actors.ActorSystem(systembase)
-    input_actor = system.createActor(MidiInput)
-    print_actor = system.createActor(MessagePrinter)
+    midi_poller = system.createActor(MidiInput)
+    printer = system.createActor(MessagePrinter)
     button_press_interpreter = system.createActor(ButtonPressInterpreter)
 
-    #system.tell(input_actor, 'init')
-    #system.tell(button_press_interpreter, 'init')
-    system.tell(input_actor, ('subscribe', button_press_interpreter))
-    system.tell(button_press_interpreter, ('subscribe', print_actor))
-
-    system.tell(input_actor, 'start')
+    system.tell(midi_poller, ('subscribe', button_press_interpreter))
+    system.tell(button_press_interpreter, ('subscribe', printer))
 
     for _ in range(999):
         # How do I keep messages flowing without doing this?
-        system.tell(input_actor, 'nop')
+        system.tell(midi_poller, 'nop')
         time.sleep(.01)
 
     system.shutdown()
