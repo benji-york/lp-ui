@@ -26,13 +26,13 @@ class MidiInput(thespian.actors.Actor):
         self.initialized = True
         self._port = mido.open_input('Launchpad MK2 MIDI 1')
         self.subscriptions = SubscriptionManager(send_func=self.send)
-        self.wakeupAfter(datetime.timedelta(milliseconds=100))
+        self.wakeupAfter(datetime.timedelta(milliseconds=10))
 
     def next(self):
         midi_message = self._port.poll()
         if midi_message is not None:
             self.subscriptions.send_message(('midi-input-event', midi_message))
-        self.wakeupAfter(datetime.timedelta(milliseconds=100))
+        self.wakeupAfter(datetime.timedelta(milliseconds=10))
         
     def receiveMessage(self, message, sender):
         if not self.initialized:
@@ -40,7 +40,7 @@ class MidiInput(thespian.actors.Actor):
 
         match ('subscribe', subscriber) in message:
             self.subscriptions.new(subscriber)
-        else: if isinstance(message, thespian.actors.WakeupMessage):
+        match message is thespian.actors.WakeupMessage in message:
             self.next()
 
 
