@@ -227,7 +227,10 @@ class ButtonFader(thespian.actors.Actor):
     def fade(self):
         for coordinate, level in self.levels:
             self.send(self.lights, ('set', coordinate, Color(level, level, level)))
-        self.levels = f{(coordinate, level-1) for (coordinate, level) in self.levels}
+        self.levels = f{
+            (coordinate, level-1)
+            for (coordinate, level) in self.levels
+            if level > 0}
         self.wakeupAfter(datetime.timedelta(milliseconds=10))
 
     def receiveMessage(self, message, sender):
