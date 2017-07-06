@@ -428,22 +428,26 @@ def run():
     button_blinker = system.createActor(ButtonBlinker)
     system.tell(button_blinker, ('set-lights', lights))
 
-    toggle_button = system.createActor(ToggleButton)
-    system.tell(toggle_button, ('set-coordinate', Coordinate(1, 2)))
-    system.tell(button_press_interpreter, ('subscribe', toggle_button))
+    toggle_button_1 = system.createActor(ToggleButton)
+    system.tell(toggle_button_1, ('set-coordinate', Coordinate(1, 2)))
+    system.tell(button_press_interpreter, ('subscribe', toggle_button_1))
+
+    toggle_button_2 = system.createActor(ToggleButton)
+    system.tell(toggle_button_2, ('set-coordinate', Coordinate(1, 3)))
+    system.tell(button_press_interpreter, ('subscribe', toggle_button_2))
 
     toggle_button_indicator = system.createActor(ToggleButtonIndicator)
     system.tell(toggle_button_indicator, ('set-indicator', button_indicator))
-    system.tell(toggle_button, ('subscribe', toggle_button_indicator))
+    system.tell(toggle_button_1, ('subscribe', toggle_button_indicator))
 
     toggle_button_blinker = system.createActor(ToggleButtonBlinker)
     system.tell(toggle_button_blinker, ('set-blinker', button_blinker))
     system.tell(toggle_button_blinker, ('set-indicator', button_indicator))
-    #system.tell(toggle_button, ('subscribe', toggle_button_blinker))
+    system.tell(toggle_button_2, ('subscribe', toggle_button_blinker))
 
     printer = system.createActor(MessagePrinter)
     #system.tell(button_press_interpreter, ('subscribe', printer))
-    #system.tell(toggle_button, ('subscribe', printer))
+    #system.tell(toggle_button_1, ('subscribe', printer))
 
     while True:
         # How do I keep messages flowing without doing this?
