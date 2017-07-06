@@ -308,17 +308,12 @@ class ToggleButton(thespian.actors.Actor):
         self.subscriptions = SubscriptionManager(send_func=self.send)
 
     def button_down(self):
-        self.send(self.lighter, ('light-on', self.coordinate))
+        self.subscriptions.send_message(('button-down', self.coordinate))
 
     def toggle(self):
         self.on ^= True
-        self.send(self.lighter, ('light-off', self.coordinate))
-        if self.on:
-            self.send(self.blinker, ('start-blinking', self.coordinate))
-            self.subscriptions.send_message(('button-on', self.coordinate))
-        else:
-            self.send(self.blinker, ('stop-blinking', self.coordinate))
-            self.subscriptions.send_message(('button-off', self.coordinate))
+        state = ('button-off', 'button-on')[self.on]
+        self.subscriptions.send_message((state, self.coordinate))
 
     def receiveMessage(self, message, sender):
         if not self.initialized:
@@ -329,16 +324,40 @@ class ToggleButton(thespian.actors.Actor):
                 self.subscriptions.new(subscriber)
             match ('set-coordinate', coordinate):
                 self.coordinate = coordinate
-            match ('set-lighter', lighter):
-                self.lighter = lighter
-            match ('set-blinker', blinker):
-                self.blinker = blinker
             match ('lp-button-down', coordinate):
                 if coordinate == self.coordinate:
                     self.button_down()
             match ('lp-button-up', coordinate):
                 if coordinate == self.coordinate:
                     self.toggle()
+        else:
+            raise UnrecognizedMessage(message)
+
+
+class ToggleButtonBlinker(thespian.actors.Actor):
+
+    def button_down(self, coordinate):
+        self.send(self.lighter, ('light-on', coordinate))
+
+    def button_on(self, coordinate):
+        self.send(self.lighter, ('light-off', coordinate))
+        self.send(self.blinker, ('start-blinking', self.coordinate))
+
+    def button_off(self, coordinate):
+        self.send(self.blinker, ('stop-blinking', self.coordinate))
+
+    def receiveMessage(self, message, sender):
+        case message:
+            match ('set-lighter', lighter):
+                self.lighter = lighter
+            match ('set-blinker', blinker):
+                self.blinker = blinker
+            match ('button-down', coordinate):
+                self.button_down(coordinate)
+            match ('button-on', coordinate):
+                self.button_on(coordinate)
+            match ('button-off', coordinate):
+                self.button_off(coordinate)
         else:
             raise UnrecognizedMessage(message)
 
@@ -378,10 +397,13 @@ def run():
     system.tell(button_blinker, ('set-lights', lights))
 
     toggle_button = system.createActor(ToggleButton)
-    system.tell(toggle_button, ('set-blinker', button_blinker))
-    system.tell(toggle_button, ('set-lighter', button_lighter))
     system.tell(toggle_button, ('set-coordinate', Coordinate(1, 2)))
     system.tell(button_press_interpreter, ('subscribe', toggle_button))
+
+    toggle_button_blinker = system.createActor(ToggleButtonBlinker)
+    system.tell(toggle_button_blinker, ('set-blinker', button_blinker))
+    system.tell(toggle_button_blinker, ('set-lighter', button_lighter))
+    system.tell(toggle_button, ('subscribe', toggle_button_blinker))
 
     printer = system.createActor(MessagePrinter)
     #system.tell(button_press_interpreter, ('subscribe', printer))
