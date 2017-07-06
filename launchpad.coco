@@ -173,6 +173,45 @@ class ButtonLighter(thespian.actors.Actor):
             raise UnrecognizedMessage(message)
 
 
+class ButtonBlinker(thespian.actors.Actor):
+
+    initialized = False
+    blinking = f{}
+    on = True
+
+    def init(self):
+        self.initialized = True
+        self.wakeupAfter(datetime.timedelta(milliseconds=500))
+
+    def toggle_blinking(self, coordinate):
+        self.blinking = self.blinking ^ f{coordinate}
+        self.send(self.lights, ('set', coordinate, BLACK))
+
+    def blink(self):
+        color = [BLACK, DARK_WHITE][self.on]
+        for coordinate in self.blinking:
+            self.send(self.lights, ('set', coordinate, color))
+        self.on ^= True
+        self.wakeupAfter(datetime.timedelta(milliseconds=500))
+
+    def receiveMessage(self, message, sender):
+        if not self.initialized:
+            self.init()
+
+        case message:
+            match ('set-lights', lights):
+                self.lights = lights
+            match ('lp-button-down', coordinate):
+                self.toggle_blinking(coordinate)
+            match ('lp-button-up', coordinate):
+                pass
+            match message is thespian.actors.WakeupMessage:
+                self.blink()
+        else:
+            raise UnrecognizedMessage(message)
+
+
+
 class MessagePrinter(thespian.actors.Actor):
 
     def receiveMessage(self, message, sender):
@@ -193,7 +232,7 @@ def run():
     printer = system.createActor(MessagePrinter)
     button_press_interpreter = system.createActor(ButtonPressInterpreter)
     lights = system.createActor(LaunchpadLights)
-    button_lighter = system.createActor(ButtonLighter)
+    button_lighter = system.createActor(ButtonBlinker)
 
     system.tell(midi_in, ('subscribe', button_press_interpreter))
     system.tell(lights, ('set-midi-out', midi_out))
@@ -202,7 +241,7 @@ def run():
     system.tell(button_press_interpreter, ('subscribe', button_lighter))
     system.tell(button_press_interpreter, ('subscribe', printer))
 
-    for _ in range(999):
+    while True:
         # How do I keep messages flowing without doing this?
         system.tell(nopper, 'nop')
         time.sleep(.01)
