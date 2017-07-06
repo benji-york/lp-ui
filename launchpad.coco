@@ -29,7 +29,7 @@ class MidiIn(thespian.actors.Actor):
         self.initialized = True
         self.port = mido.open_input('Launchpad MK2 MIDI 1')
         self.subscriptions = SubscriptionManager(send_func=self.send)
-        self.wakeupAfter(datetime.timedelta(milliseconds=10))
+        self.wakeupAfter(datetime.timedelta())
 
     def next(self):
         midi_message = self.port.poll()
@@ -136,11 +136,20 @@ CLEAR_LIGHTS = [240, 0, 32, 41, 2, 24, 14, 0, 247]
 
 class LaunchpadLights(thespian.actors.Actor):
     initialized = False
+    midi_out = None
 
     def init(self):
+        self.wakeupAfter(datetime.timedelta())
+
+        # We need to clear any lights currently enabled on the launchpad.
+        # If we have not yet been told about the MIDI output agent we are
+        # to send messages to, then we can not initialize yet.  
+        if self.midi_out is None:
+            return
+
         self.initialized = True
         self.pixels = {}
-        self.wakeupAfter(datetime.timedelta(milliseconds=10))
+        self.send(self.midi_out, ('send', 'sysex', CLEAR_LIGHTS))
 
     def set_color(self, coordinate, color):
         self.pixels[coordinate] = color
@@ -148,9 +157,6 @@ class LaunchpadLights(thespian.actors.Actor):
     def render(self):
         self.send(self.midi_out, ('send', 'sysex', build_lights_commands(self.pixels.items())))
         self.wakeupAfter(datetime.timedelta(milliseconds=10))
-
-    def clear(self):
-        self.send(self.midi_out, ('send', 'sysex', CLEAR_LIGHTS))
 
     def receiveMessage(self, message, sender):
         if not self.initialized:
@@ -160,7 +166,7 @@ class LaunchpadLights(thespian.actors.Actor):
             match ('set-midi-out', midi_out):
                 self.midi_out = midi_out
             match 'clear':
-                self.clear()
+                self.init()
             match ('set', coordinate, color):
                 self.set_color(coordinate, color)
             match message is thespian.actors.WakeupMessage:
@@ -194,7 +200,7 @@ class ButtonBlinker(thespian.actors.Actor):
 
     def init(self):
         self.initialized = True
-        self.wakeupAfter(datetime.timedelta(milliseconds=500))
+        self.wakeupAfter(datetime.timedelta())
 
     def toggle_blinking(self, coordinate):
         self.blinking ^= f{coordinate}
@@ -232,7 +238,7 @@ class ButtonFader(thespian.actors.Actor):
     def init(self):
         self.initialized = True
         self.levels = {}
-        self.wakeupAfter(datetime.timedelta(milliseconds=10))
+        self.wakeupAfter(datetime.timedelta())
 
     def start_fade(self, coordinate):
         self.levels[coordinate] = 63
