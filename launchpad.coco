@@ -72,6 +72,18 @@ class MidiOut(thespian.actors.Actor):
             raise UnrecognizedMessage(message)
 
 
+def note_to_coordinate(note):
+    return Coordinate(row=note // 10 - 1, column=note % 10 - 1)
+
+
+def velocity_to_event_type(velocity):
+    if velocity:
+        event_type = 'lp-button-down'
+    else:
+        event_type = 'lp-button-up'
+    return event_type
+
+
 class ButtonPressInterpreter(thespian.actors.Actor):
     initialized = False
 
@@ -87,12 +99,8 @@ class ButtonPressInterpreter(thespian.actors.Actor):
             match ('subscribe', subscriber):
                 self.subscriptions.new(subscriber)
             match ('midi-input-event', event):
-                coordinate = Coordinate(row=event.note // 10 - 1, column=event.note % 10 - 1)
-                if event.velocity:
-                    event_type = 'lp-button-down'
-                else:
-                    event_type = 'lp-button-up'
-
+                event_type = velocity_to_event_type(event.velocity)
+                coordinate = note_to_coordinate(event.note)
                 self.subscriptions.send_message((event_type, coordinate))
         else:
             raise UnrecognizedMessage(message)
