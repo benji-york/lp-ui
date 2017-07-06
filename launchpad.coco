@@ -207,15 +207,21 @@ class ButtonBlinker(thespian.actors.Actor):
 
     initialized = False
     blinking = f{}
+    on_color = DARK_WHITE
+    off_color = BLACK
     on = True
 
     def init(self):
         self.initialized = True
         self.wakeupAfter(datetime.timedelta())
 
-    def toggle_blinking(self, coordinate):
-        self.blinking ^= f{coordinate}
-        self.send(self.lights, ('set', coordinate, BLACK))
+    def start_blinking(self, coordinate):
+        self.blinking |= f{coordinate}
+        self.send(self.lights, ('set', coordinate, self.on_color))
+
+    def stop_blinking(self, coordinate):
+        self.blinking -= f{coordinate}
+        self.send(self.lights, ('set', coordinate, self.off_color))
 
     def blink(self):
         color = [BLACK, DARK_WHITE][self.on]
@@ -231,15 +237,18 @@ class ButtonBlinker(thespian.actors.Actor):
         case message:
             match ('set-lights', lights):
                 self.lights = lights
-            match ('lp-button-down', coordinate):
-                self.toggle_blinking(coordinate)
-            match ('lp-button-up', coordinate):
-                pass
+            match ('set-on-color', color):
+                self.on_color = color
+            match ('set-off-color', color):
+                self.off_color = color
+            match ('start-blinking', coordinate):
+                self.start_blinking(coordinate)
+            match ('stop-blinking', coordinate):
+                self.stop_blinking(coordinate)
             match message is thespian.actors.WakeupMessage:
                 self.blink()
         else:
             raise UnrecognizedMessage(message)
-
 
 
 class ButtonFader(thespian.actors.Actor):
@@ -280,6 +289,43 @@ class ButtonFader(thespian.actors.Actor):
             raise UnrecognizedMessage(message)
 
 
+class ToggleButton(thespian.actors.Actor):
+
+    initialized = False
+    on = False
+
+    def init(self):
+        self.initialized = True
+        self.subscriptions = SubscriptionManager(send_func=self.send)
+
+    def toggle(self):
+        self.on ^= True
+        if self.on:
+            self.send(self.blinker, ('start-blinking', self.coordinate))
+            self.subscriptions.send_message(('button-on', self.coordinate))
+        else:
+            self.send(self.blinker, ('stop-blinking', self.coordinate))
+            self.subscriptions.send_message(('button-off', self.coordinate))
+
+    def receiveMessage(self, message, sender):
+        if not self.initialized:
+            self.init()
+
+        case message:
+            match ('subscribe', subscriber):
+                self.subscriptions.new(subscriber)
+            match ('set-coordinate', coordinate):
+                self.coordinate = coordinate
+            match ('set-blinker', blinker):
+                self.blinker= blinker
+            match ('lp-button-down', coordinate):
+                pass
+            match ('lp-button-up', coordinate):
+                if coordinate == self.coordinate:
+                    self.toggle()
+        else:
+            raise UnrecognizedMessage(message)
+
 
 class MessagePrinter(thespian.actors.Actor):
 
@@ -298,20 +344,32 @@ def run():
     nopper = system.createActor(Nopper)
     midi_in = system.createActor(MidiIn)
     midi_out = system.createActor(MidiOut)
-    printer = system.createActor(MessagePrinter)
-    button_press_interpreter = system.createActor(ButtonPressInterpreter)
-    lights = system.createActor(LaunchpadLights)
-    button_lighter = system.createActor(ButtonLighter)
-    button_fader = system.createActor(ButtonFader)
 
-    system.tell(midi_in, ('subscribe', button_press_interpreter))
+    lights = system.createActor(LaunchpadLights)
     system.tell(lights, ('set-midi-out', midi_out))
-    system.tell(lights, 'clear')
+
+    button_press_interpreter = system.createActor(ButtonPressInterpreter)
+    system.tell(midi_in, ('subscribe', button_press_interpreter))
+
+    button_lighter = system.createActor(ButtonLighter)
     system.tell(button_lighter, ('set-lights', lights))
-    system.tell(button_fader, ('set-lights', lights))
     system.tell(button_press_interpreter, ('subscribe', button_lighter))
-    system.tell(button_press_interpreter, ('subscribe', button_fader))
+
+    #button_fader = system.createActor(ButtonFader)
+    #system.tell(button_fader, ('set-lights', lights))
+    #system.tell(button_press_interpreter, ('subscribe', button_fader))
+
+    button_blinker = system.createActor(ButtonBlinker)
+    system.tell(button_blinker, ('set-lights', lights))
+
+    toggle_button = system.createActor(ToggleButton)
+    system.tell(toggle_button, ('set-blinker', button_blinker))
+    system.tell(toggle_button, ('set-coordinate', Coordinate(1, 2)))
+    system.tell(button_press_interpreter, ('subscribe', toggle_button))
+
+    printer = system.createActor(MessagePrinter)
     #system.tell(button_press_interpreter, ('subscribe', printer))
+    system.tell(toggle_button, ('subscribe', printer))
 
     while True:
         # How do I keep messages flowing without doing this?
