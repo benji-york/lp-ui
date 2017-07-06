@@ -3,6 +3,9 @@ import mido
 import thespian.actors
 import time
 
+class UnrecognizedMessage(ValueError):
+    pass
+
 
 class SubscriptionManager(object):
 
@@ -18,18 +21,18 @@ class SubscriptionManager(object):
             self.send_func(subscriber, message)
 
 
-class MidiInput(thespian.actors.Actor):
+class MidiIn(thespian.actors.Actor):
     
     initialized = False
 
     def init(self):
         self.initialized = True
-        self._port = mido.open_input('Launchpad MK2 MIDI 1')
+        self.port = mido.open_input('Launchpad MK2 MIDI 1')
         self.subscriptions = SubscriptionManager(send_func=self.send)
         self.wakeupAfter(datetime.timedelta(milliseconds=10))
 
     def next(self):
-        midi_message = self._port.poll()
+        midi_message = self.port.poll()
         if midi_message is not None:
             self.subscriptions.send_message(('midi-input-event', midi_message))
         self.wakeupAfter(datetime.timedelta(milliseconds=10))
@@ -43,7 +46,30 @@ class MidiInput(thespian.actors.Actor):
                 self.subscriptions.new(subscriber)
             match message is thespian.actors.WakeupMessage:
                 self.next()
+        else:
+            raise UnrecognizedMessage(message)
 
+
+class MidiOut(thespian.actors.Actor):
+    
+    initialized = False
+
+    def init(self):
+        self.initialized = True
+        self.port = mido.open_output('Launchpad MK2 MIDI 1')
+
+    def send(self, kind, data):
+        self.port.send(mido.Message(kind).from_bytes(data))
+        
+    def receiveMessage(self, message, sender):
+        if not self.initialized:
+            self.init()
+
+        case message:
+            match ('send', kind, data):
+                self.send(kind, data)
+        else:
+            raise UnrecognizedMessage(message)
 
 
 class ButtonPressInterpreter(thespian.actors.Actor):
@@ -61,14 +87,94 @@ class ButtonPressInterpreter(thespian.actors.Actor):
             match ('subscribe', subscriber):
                 self.subscriptions.new(subscriber)
             match ('midi-input-event', event):
-                column, row = event.note % 10 - 1, event.note // 10 - 1
+                coordinate = Coordinate(row=event.note // 10 - 1, column=event.note % 10 - 1)
                 if event.velocity:
                     event_type = 'lp-button-down'
                 else:
                     event_type = 'lp-button-up'
 
-                self.subscriptions.send_message((event_type, row, column))
+                self.subscriptions.send_message((event_type, coordinate))
+        else:
+            raise UnrecognizedMessage(message)
             
+
+data Coordinate(row, column)
+data Color(red, green, blue)
+
+RED = Color(63, 0, 0)
+GREEN = Color(0, 63, 0)
+BLUE = Color(0, 0, 63)
+YELLOW = Color(63, 40, 0)
+BLACK = Color(0, 0, 0)
+WHITE = Color(63, 63, 63)
+DARK_WHITE = Color(15, 15, 15)
+ORANGE = Color(63, 20, 0)
+
+
+def coordinate_to_index(Coordinate(row, column)):
+    # The top row (round buttons) are indexed differently.
+    if row == 8:
+        index = 104 + column
+    else:
+        index = (row + 1) * 10 + (column + 1)
+
+    assert index <= 89 or index >= 104
+    return index
+
+
+def build_lights_commands(lights):
+    commands = [240, 0, 32, 41, 2, 16, 11]
+    for coordinate, color in lights:
+        index = coordinate_to_index(coordinate)
+        commands.extend([index, *color])
+    commands.append(247)
+    return commands
+
+
+CLEAR_LIGHTS = [240, 0, 32, 41, 2, 24, 14, 0, 247]
+
+
+class LaunchpadLights(thespian.actors.Actor):
+    initialized = False
+
+    def set_color(self, coordinate, color):
+        self.send(
+            self.midi_out, ('send', 'sysex', build_lights_commands([(coordinate, color)])))
+
+    def clear(self):
+        self.send(self.midi_out, ('send', 'sysex', CLEAR_LIGHTS))
+
+    def receiveMessage(self, message, sender):
+        case message:
+            match ('set-midi-out', midi_out):
+                self.midi_out = midi_out
+            match 'clear':
+                self.clear()
+            match ('set', coordinate, color):
+                self.set_color(coordinate, color)
+        else:
+            raise UnrecognizedMessage(message)
+
+
+class ButtonLighter(thespian.actors.Actor):
+
+    def light_on(self, coordinate):
+        self.send(self.lights, ('set', coordinate, DARK_WHITE))
+
+    def light_off(self, coordinate):
+        self.send(self.lights, ('set', coordinate, BLACK))
+
+    def receiveMessage(self, message, sender):
+        case message:
+            match ('set-lights', lights):
+                self.lights = lights
+            match ('lp-button-down', coordinate):
+                self.light_on(coordinate)
+            match ('lp-button-up', coordinate):
+                self.light_off(coordinate)
+        else:
+            raise UnrecognizedMessage(message)
+
 
 class MessagePrinter(thespian.actors.Actor):
 
@@ -76,18 +182,32 @@ class MessagePrinter(thespian.actors.Actor):
         print(message)
 
 
-def run(systembase=None):
-    system = thespian.actors.ActorSystem(systembase)
-    midi_poller = system.createActor(MidiInput)
+class Nopper(thespian.actors.Actor):
+
+    def receiveMessage(self, message, sender):
+        pass
+
+
+def run():
+    system = thespian.actors.ActorSystem()
+    nopper = system.createActor(Nopper)
+    midi_in = system.createActor(MidiIn)
+    midi_out = system.createActor(MidiOut)
     printer = system.createActor(MessagePrinter)
     button_press_interpreter = system.createActor(ButtonPressInterpreter)
+    lights = system.createActor(LaunchpadLights)
+    button_lighter = system.createActor(ButtonLighter)
 
-    system.tell(midi_poller, ('subscribe', button_press_interpreter))
+    system.tell(midi_in, ('subscribe', button_press_interpreter))
+    system.tell(lights, ('set-midi-out', midi_out))
+    system.tell(lights, 'clear')
+    system.tell(button_lighter, ('set-lights', lights))
+    system.tell(button_press_interpreter, ('subscribe', button_lighter))
     system.tell(button_press_interpreter, ('subscribe', printer))
 
     for _ in range(999):
         # How do I keep messages flowing without doing this?
-        system.tell(midi_poller, 'nop')
+        system.tell(nopper, 'nop')
         time.sleep(.01)
 
     system.shutdown()
