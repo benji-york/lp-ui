@@ -137,14 +137,25 @@ CLEAR_LIGHTS = [240, 0, 32, 41, 2, 24, 14, 0, 247]
 class LaunchpadLights(thespian.actors.Actor):
     initialized = False
 
+    def init(self):
+        self.initialized = True
+        self.pixels = {}
+        self.wakeupAfter(datetime.timedelta(milliseconds=10))
+
     def set_color(self, coordinate, color):
-        self.send(
-            self.midi_out, ('send', 'sysex', build_lights_commands([(coordinate, color)])))
+        self.pixels[coordinate] = color
+
+    def render(self):
+        self.send(self.midi_out, ('send', 'sysex', build_lights_commands(self.pixels.items())))
+        self.wakeupAfter(datetime.timedelta(milliseconds=10))
 
     def clear(self):
         self.send(self.midi_out, ('send', 'sysex', CLEAR_LIGHTS))
 
     def receiveMessage(self, message, sender):
+        if not self.initialized:
+            self.init()
+
         case message:
             match ('set-midi-out', midi_out):
                 self.midi_out = midi_out
@@ -152,6 +163,8 @@ class LaunchpadLights(thespian.actors.Actor):
                 self.clear()
             match ('set', coordinate, color):
                 self.set_color(coordinate, color)
+            match message is thespian.actors.WakeupMessage:
+                self.render()
         else:
             raise UnrecognizedMessage(message)
 
@@ -215,21 +228,24 @@ class ButtonBlinker(thespian.actors.Actor):
 class ButtonFader(thespian.actors.Actor):
 
     initialized = False
-    levels = f{}
 
     def init(self):
         self.initialized = True
+        self.levels = {}
         self.wakeupAfter(datetime.timedelta(milliseconds=10))
 
     def start_fade(self, coordinate):
-        self.levels |= f{(coordinate, 63)}
+        self.levels[coordinate] = 63
+
+    def turn_on(self, coordinate):
+        self.send(self.lights, ('set', coordinate, BLUE))
 
     def fade(self):
-        self.levels = f{
-            (coordinate, level-1)
-            for (coordinate, level) in self.levels
-            if level >= 0}
-        for coordinate, level in self.levels:
+        self.levels = {
+            coordinate:level-1
+            for (coordinate, level) in self.levels.items()
+            if level > 0}
+        for coordinate, level in self.levels.items():
             self.send(self.lights, ('set', coordinate, Color(level, level, level)))
         self.wakeupAfter(datetime.timedelta(milliseconds=10))
 
@@ -241,9 +257,9 @@ class ButtonFader(thespian.actors.Actor):
             match ('set-lights', lights):
                 self.lights = lights
             match ('lp-button-down', coordinate):
-                self.start_fade(coordinate)
+                self.turn_on(coordinate)
             match ('lp-button-up', coordinate):
-                pass
+                self.start_fade(coordinate)
             match message is thespian.actors.WakeupMessage:
                 self.fade()
         else:
@@ -278,7 +294,7 @@ def run():
     system.tell(lights, 'clear')
     system.tell(button_lighter, ('set-lights', lights))
     system.tell(button_press_interpreter, ('subscribe', button_lighter))
-    system.tell(button_press_interpreter, ('subscribe', printer))
+    #system.tell(button_press_interpreter, ('subscribe', printer))
 
     while True:
         # How do I keep messages flowing without doing this?
