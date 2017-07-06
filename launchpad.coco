@@ -161,9 +161,6 @@ class ButtonLighter(thespian.actors.Actor):
     def light_on(self, coordinate):
         self.send(self.lights, ('set', coordinate, DARK_WHITE))
 
-    def light_off(self, coordinate):
-        self.send(self.lights, ('set', coordinate, BLACK))
-
     def receiveMessage(self, message, sender):
         case message:
             match ('set-lights', lights):
@@ -171,7 +168,7 @@ class ButtonLighter(thespian.actors.Actor):
             match ('lp-button-down', coordinate):
                 self.light_on(coordinate)
             match ('lp-button-up', coordinate):
-                self.light_off(coordinate)
+                pass
         else:
             raise UnrecognizedMessage(message)
 
