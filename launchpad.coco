@@ -341,10 +341,10 @@ class ToggleButtonBlinker(thespian.actors.Actor):
 
     def button_on(self, coordinate):
         self.send(self.lighter, ('light-off', coordinate))
-        self.send(self.blinker, ('start-blinking', self.coordinate))
+        self.send(self.blinker, ('start-blinking', coordinate))
 
     def button_off(self, coordinate):
-        self.send(self.blinker, ('stop-blinking', self.coordinate))
+        self.send(self.blinker, ('stop-blinking', coordinate))
 
     def receiveMessage(self, message, sender):
         case message:
