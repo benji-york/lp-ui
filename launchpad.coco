@@ -3,9 +3,6 @@ import mido
 import thespian.actors
 import time
 
-class UnrecognizedMessage(ValueError):
-    pass
-
 
 class SubscriptionManager(object):
 
@@ -46,8 +43,6 @@ class MidiIn(thespian.actors.Actor):
                 self.subscriptions.new(subscriber)
             match message is thespian.actors.WakeupMessage:
                 self.next()
-        else:
-            raise UnrecognizedMessage(message)
 
 
 class MidiOut(thespian.actors.Actor):
@@ -68,8 +63,6 @@ class MidiOut(thespian.actors.Actor):
         case message:
             match ('send', kind, data):
                 self.send(kind, data)
-        else:
-            raise UnrecognizedMessage(message)
 
 
 def note_to_coordinate(note):
@@ -102,8 +95,6 @@ class ButtonPressInterpreter(thespian.actors.Actor):
                 event_type = velocity_to_event_type(event.velocity)
                 coordinate = note_to_coordinate(event.note)
                 self.subscriptions.send_message((event_type, coordinate))
-        else:
-            raise UnrecognizedMessage(message)
             
 
 data Coordinate(row, column)
@@ -182,8 +173,6 @@ class LaunchpadLights(thespian.actors.Actor):
                 self.set_color(coordinate, color)
             match message is thespian.actors.WakeupMessage:
                 self.render()
-        else:
-            raise UnrecognizedMessage(message)
 
 
 class ButtonIndicator(thespian.actors.Actor):
@@ -217,8 +206,6 @@ class ButtonIndicator(thespian.actors.Actor):
                 self.button_on(coordinate)
             match ('button-off', coordinate):
                 self.button_off(coordinate)
-        else:
-            raise UnrecognizedMessage(message)
 
 
 class ButtonBlinker(thespian.actors.Actor):
@@ -264,8 +251,6 @@ class ButtonBlinker(thespian.actors.Actor):
                 self.stop_blinking(coordinate)
             match message is thespian.actors.WakeupMessage:
                 self.blink()
-        else:
-            raise UnrecognizedMessage(message)
 
 
 class ButtonFader(thespian.actors.Actor):
@@ -302,8 +287,6 @@ class ButtonFader(thespian.actors.Actor):
                 self.start_fade(coordinate)
             match message is thespian.actors.WakeupMessage:
                 self.fade()
-        else:
-            raise UnrecognizedMessage(message)
 
 
 class ToggleButton(thespian.actors.Actor):
@@ -338,8 +321,6 @@ class ToggleButton(thespian.actors.Actor):
             match ('lp-button-up', coordinate):
                 if coordinate == self.coordinate:
                     self.toggle()
-        else:
-            raise UnrecognizedMessage(message)
 
 
 class ToggleButtonIndicator(thespian.actors.Actor):
@@ -363,8 +344,6 @@ class ToggleButtonIndicator(thespian.actors.Actor):
                 self.button_on(coordinate)
             match ('button-off', coordinate):
                 self.button_off(coordinate)
-        else:
-            raise UnrecognizedMessage(message)
 
 
 class ToggleButtonBlinker(thespian.actors.Actor):
@@ -373,6 +352,7 @@ class ToggleButtonBlinker(thespian.actors.Actor):
         self.send(self.lighter, ('button-pressed', coordinate))
 
     def button_on(self, coordinate):
+        self.send(self.lighter, ('button-off', coordinate))
         self.send(self.blinker, ('start-blinking', coordinate))
 
     def button_off(self, coordinate):
@@ -390,8 +370,6 @@ class ToggleButtonBlinker(thespian.actors.Actor):
                 self.button_on(coordinate)
             match ('button-off', coordinate):
                 self.button_off(coordinate)
-        else:
-            raise UnrecognizedMessage(message)
 
 
 class MessagePrinter(thespian.actors.Actor):
