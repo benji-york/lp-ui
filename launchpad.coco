@@ -370,10 +370,9 @@ class ToggleButtonIndicator(thespian.actors.Actor):
 class ToggleButtonBlinker(thespian.actors.Actor):
 
     def button_down(self, coordinate):
-        self.send(self.lighter, ('light-on', coordinate))
+        self.send(self.lighter, ('button-pressed', coordinate))
 
     def button_on(self, coordinate):
-        self.send(self.lighter, ('light-off', coordinate))
         self.send(self.blinker, ('start-blinking', coordinate))
 
     def button_off(self, coordinate):
