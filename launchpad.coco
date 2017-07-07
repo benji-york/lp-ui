@@ -155,7 +155,7 @@ class LaunchpadLights(thespian.actors.Actor):
     midi_out = None
 
     def init(self):
-        self.wakeupAfter(datetime.timedelta(milliseconds=1))
+        self.wakeupAfter(datetime.timedelta(milliseconds=500))
 
         # We need to clear any lights currently enabled on the launchpad.
         # If we have not yet been told about the MIDI output agent we are
