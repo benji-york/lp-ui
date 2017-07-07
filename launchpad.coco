@@ -501,7 +501,8 @@ def run():
         system.tell(fader, ('set-origin', Coordinate(2, column)))
         system.tell(fader, ('set-vector', Vector(6, 0)))
         system.tell(fader, ('subscribe', fader_button_indicator))
-        system.tell(button_press_interpreter, ('subscribe',fader))
+        system.tell(fader, ('subscribe', fader_button_indicator))
+        system.tell(button_press_interpreter, ('subscribe', fader))
 
     while True:
         # How do I keep messages flowing without doing this?
