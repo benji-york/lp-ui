@@ -533,12 +533,11 @@ def run():
             ('subscribe', fader_button_indicator))
         button_press_interpreter `subscribe` fader
 
-    while True:
-        # How do I keep messages flowing without doing this?
-        system.tell(nopper, 'nop')
-        time.sleep(.01)
-
-    system.shutdown()
+    try:
+        while True:
+            system.listen(datetime.timedelta(seconds=1))
+    finally:
+        system.shutdown()
 
 
 if __name__ == '__main__':
