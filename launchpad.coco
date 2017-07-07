@@ -66,6 +66,7 @@ class MidiOut(thespian.actors.Actor):
         if message `isinstance` thespian.actors.WakeupMessage:
             self.ready = True
         elif not self.ready:
+            # XXX does this work or does it create an infinite loop?
             # The MIDI device isn't ready to go yet, so requeue the message for later.
             self.send(self.myAddress, message)
             return
@@ -154,7 +155,7 @@ class LaunchpadLights(thespian.actors.Actor):
     midi_out = None
 
     def init(self):
-        self.wakeupAfter(datetime.timedelta())
+        self.wakeupAfter(datetime.timedelta(milliseconds=500))
 
         # We need to clear any lights currently enabled on the launchpad.
         # If we have not yet been told about the MIDI output agent we are
@@ -460,59 +461,77 @@ class Nopper(thespian.actors.Actor):
         pass
 
 
+def create_and_tell(system, actor_class, *kv_pairs):
+    actor = system.createActor(actor_class)
+    for key, value in kv_pairs:
+        system.tell(actor, (key, value))
+    return actor
+
+
 def run():
     system = thespian.actors.ActorSystem()
+    create = (actor_class, *kv_pairs) -> create_and_tell(system, actor_class, *kv_pairs)
+    subscribe = (to, subscriber) -> system.tell(to, ('subscribe', subscriber))
+
     nopper = system.createActor(Nopper)
     midi_in = system.createActor(MidiIn)
     midi_out = system.createActor(MidiOut)
 
-    lights = system.createActor(LaunchpadLights)
-    system.tell(lights, ('set-midi-out', midi_out))
+    lights = create(
+        LaunchpadLights,
+        ('set-midi-out', midi_out))
 
-    button_press_interpreter = system.createActor(ButtonPressInterpreter)
-    system.tell(midi_in, ('subscribe', button_press_interpreter))
+    button_press_interpreter = create(ButtonPressInterpreter)
+    subscribe(midi_in, button_press_interpreter)
 
-    fader_button_indicator = system.createActor(ButtonIndicator)
-    system.tell(fader_button_indicator, ('set-lights', lights))
+    fader_button_indicator = create(
+        ButtonIndicator,
+        ('set-lights', lights))
 
-    mute_button_indicator = system.createActor(ButtonIndicator)
-    system.tell(mute_button_indicator, ('set-lights', lights))
-    system.tell(mute_button_indicator, ('set-on-color', RED))
+    mute_button_indicator = create(
+        ButtonIndicator,
+        ('set-lights', lights),
+        ('set-on-color', RED))
 
-    solo_button_indicator = system.createActor(ButtonIndicator)
-    system.tell(solo_button_indicator, ('set-lights', lights))
+    solo_button_indicator = create(
+        ButtonIndicator,
+        ('set-lights', lights))
 
-    toggle_button_indicator = system.createActor(ToggleButtonIndicator)
-    system.tell(toggle_button_indicator, ('set-indicator', mute_button_indicator))
+    toggle_button_indicator = create(
+        ToggleButtonIndicator,
+        ('set-indicator', mute_button_indicator))
 
-    solo_button_blinker = system.createActor(ButtonBlinker)
-    system.tell(solo_button_blinker, ('set-lights', lights))
-    system.tell(solo_button_blinker, ('set-on-color', GREEN))
+    solo_button_blinker = create(
+        ButtonBlinker,
+        ('set-lights', lights),
+        ('set-on-color', GREEN))
 
-    toggle_button_blinker = system.createActor(ToggleButtonBlinker)
-    system.tell(toggle_button_blinker, ('set-blinker', solo_button_blinker))
-    system.tell(toggle_button_blinker, ('set-indicator', solo_button_indicator))
+    toggle_button_blinker = create(
+        ToggleButtonBlinker,
+        ('set-blinker', solo_button_blinker),
+        ('set-indicator', solo_button_indicator))
 
     printer = system.createActor(MessagePrinter)
 
     for column in range(8):
-        button = system.createActor(ToggleButton)
-        system.tell(button, ('set-coordinate', Coordinate(1, column)))
-        system.tell(button, ('subscribe', toggle_button_blinker))
-        system.tell(button_press_interpreter, ('subscribe', button))
+        button = create(ToggleButton, ('set-coordinate', Coordinate(1, column)))
+        button `subscribe` toggle_button_blinker
+        button_press_interpreter `subscribe` button
 
     for column in range(8):
-        button = system.createActor(ToggleButton)
-        system.tell(button, ('set-coordinate', Coordinate(0, column)))
-        system.tell(button, ('subscribe', toggle_button_indicator))
-        system.tell(button_press_interpreter, ('subscribe', button))
+        button = create(
+            ToggleButton,
+            ('set-coordinate', Coordinate(0, column)),
+            ('subscribe', toggle_button_indicator))
+        button_press_interpreter `subscribe` button
 
     for column in range(8):
-        fader = system.createActor(Fader)
-        system.tell(fader, ('set-origin', Coordinate(2, column)))
-        system.tell(fader, ('set-vector', Vector(6, 0)))
-        system.tell(fader, ('subscribe', fader_button_indicator))
-        system.tell(button_press_interpreter, ('subscribe', fader))
+        fader = create(
+            Fader,
+            ('set-origin', Coordinate(2, column)),
+            ('set-vector', Vector(6, 0)),
+            ('subscribe', fader_button_indicator))
+        button_press_interpreter `subscribe` fader
 
     while True:
         # How do I keep messages flowing without doing this?
