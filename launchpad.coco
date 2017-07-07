@@ -273,11 +273,14 @@ class ToggleButton(thespian.actors.Actor):
 
     def toggle(self):
         self.on ^= True
+        self.update_subscribers()
+
+    def update_subscribers(self):
         state = ('toggle-off', 'toggle-on')[self.on]
         self.subscriptions.send_message((state, self.coordinate))
         # The other subscription messages are about visual indication of
         # state, this message is for anyone tracking the value of the button.
-        self.subscriptions.send_message(('value-changed', self.on))
+        self.subscriptions.send_message(('value', self.on))
 
     def receiveMessage(self, message, sender):
         if not self.initialized:
@@ -286,6 +289,7 @@ class ToggleButton(thespian.actors.Actor):
         case message:
             match ('subscribe', subscriber):
                 self.subscriptions.new(subscriber)
+                self.update_subscribers()
             match ('set-coordinate', coordinate):
                 self.coordinate = coordinate
             match ('lp-button-down', coordinate):
@@ -357,7 +361,7 @@ def versor(vector):
 class Fader(thespian.actors.Actor):
 
     initialized = False
-    on = False
+    max_coordinate = None
 
     def init(self):
         self.initialized = True
@@ -375,13 +379,13 @@ class Fader(thespian.actors.Actor):
             coordinate += versor(self.vector)
         return coordinates
 
-    def get_on_coordinates(self, target):
+    def get_on_coordinates(self):
         coordinates = []
         for coordinate in self.coordinates:
             coordinates.append(coordinate)
-            if coordinate == target:
+            if coordinate == self.max_coordinate:
                 return coordinates
-        raise RuntimeError('level calculation failed')
+        raise RuntimeError('coordinates calculation failed')
 
     def button_down(self, coordinate):
         if coordinate not in self.coordinates:
@@ -393,10 +397,11 @@ class Fader(thespian.actors.Actor):
         if coordinate not in self.coordinates:
             return
 
-        on_coordinates = self.get_on_coordinates(coordinate)
-        level = len(on_coordinates) - 1
-        self.subscriptions.send_message(('value-changed', level))
+        self.max_coordinate = coordinate
+        self.update_subscribers()
 
+    def update_subscribers(self):
+        on_coordinates = self.get_on_coordinates()
         # Tell subscribers about all the currently-on buttons.
         for coordinate in on_coordinates:
             self.subscriptions.send_message(('button-on', coordinate))
@@ -406,6 +411,9 @@ class Fader(thespian.actors.Actor):
         for coordinate in off_coordinates:
             self.subscriptions.send_message(('button-off', coordinate))
 
+        level = len(self.get_on_coordinates()) - 1
+        self.subscriptions.send_message(('value', level))
+
     def receiveMessage(self, message, sender):
         if not self.initialized:
             self.init()
@@ -413,8 +421,12 @@ class Fader(thespian.actors.Actor):
         case message:
             match ('subscribe', subscriber):
                 self.subscriptions.new(subscriber)
+                # New subscribers shouldn have to wait for the value to change.
+                self.update_subscribers()
             match ('set-origin', coordinate):
                 self.origin = coordinate
+                if self.max_coordinate is None:
+                    self.max_coordinate = coordinate
             match ('set-vector', vector):
                 # At least one of the vector's dimentions must be zero.
                 assert 0 in vector
