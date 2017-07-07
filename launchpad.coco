@@ -303,7 +303,7 @@ class ToggleButton(thespian.actors.Actor):
 
     def toggle(self):
         self.on ^= True
-        state = ('toggle-off', 'button-on')[self.on]
+        state = ('toggle-off', 'toggle-on')[self.on]
         self.subscriptions.send_message((state, self.coordinate))
         # The other subscription messages are about visual indication of
         # state, this message is for anyone tracking the value of the button.
@@ -328,10 +328,10 @@ class ToggleButton(thespian.actors.Actor):
 
 class ToggleButtonIndicator(thespian.actors.Actor):
 
-    def button_down(self, coordinate):
+    def toggle_pressed(self, coordinate):
         self.send(self.indicator, ('button-pressed', coordinate))
 
-    def button_on(self, coordinate):
+    def toggle_on(self, coordinate):
         self.send(self.indicator, ('button-on', coordinate))
 
     def toggle_off(self, coordinate):
@@ -342,9 +342,9 @@ class ToggleButtonIndicator(thespian.actors.Actor):
             match ('set-indicator', indicator):
                 self.indicator = indicator
             match ('toggle-pressed', coordinate):
-                self.button_down(coordinate)
-            match ('button-on', coordinate):
-                self.button_on(coordinate)
+                self.toggle_pressed(coordinate)
+            match ('toggle-on', coordinate):
+                self.toggle_on(coordinate)
             match ('toggle-off', coordinate):
                 self.toggle_off(coordinate)
 
@@ -354,7 +354,7 @@ class ToggleButtonBlinker(thespian.actors.Actor):
     def button_down(self, coordinate):
         self.send(self.lighter, ('button-pressed', coordinate))
 
-    def button_on(self, coordinate):
+    def toggle_on(self, coordinate):
         self.send(self.lighter, ('button-off', coordinate))
         self.send(self.blinker, ('start-blinking', coordinate))
 
@@ -369,8 +369,8 @@ class ToggleButtonBlinker(thespian.actors.Actor):
                 self.blinker = blinker
             match ('toggle-pressed', coordinate):
                 self.button_down(coordinate)
-            match ('button-on', coordinate):
-                self.button_on(coordinate)
+            match ('toggle-on', coordinate):
+                self.toggle_on(coordinate)
             match ('toggle-off', coordinate):
                 self.toggle_off(coordinate)
 
