@@ -514,12 +514,10 @@ def run():
 
     printer = system.createActor(MessagePrinter)
 
-    actors = []
     for column in range(8):
         button = create(ToggleButton, ('set-coordinate', Coordinate(1, column)))
         button `subscribe` toggle_button_blinker
         button_press_interpreter `subscribe` button
-        actors.append(button)
 
     for column in range(8):
         button = create(
@@ -527,7 +525,6 @@ def run():
             ('set-coordinate', Coordinate(0, column)),
             ('subscribe', toggle_button_indicator))
         button_press_interpreter `subscribe` button
-        actors.append(button)
 
     for column in range(8):
         fader = create(
@@ -536,7 +533,6 @@ def run():
             ('set-vector', Vector(5, 0)),
             ('subscribe', fader_button_indicator))
         button_press_interpreter `subscribe` fader
-        actors.append(fader)
 
     try:
         while True:
