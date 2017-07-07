@@ -208,42 +208,6 @@ class ButtonIndicator(thespian.actors.Actor):
                 self.button_off(coordinate)
 
 
-class ButtonFader(thespian.actors.Actor):
-
-    initialized = False
-
-    def init(self):
-        self.initialized = True
-        self.levels = {}
-        self.wakeupAfter(datetime.timedelta())
-
-    def start_fade(self, coordinate):
-        self.levels[coordinate] = 63
-
-    def fade(self):
-        self.levels = {
-            coordinate:level-1
-            for (coordinate, level) in self.levels.items()
-            if level > 0}
-        for coordinate, level in self.levels.items():
-            self.send(self.lights, ('set', coordinate, Color(level, level, level)))
-        self.wakeupAfter(datetime.timedelta(milliseconds=10))
-
-    def receiveMessage(self, message, sender):
-        if not self.initialized:
-            self.init()
-
-        case message:
-            match ('set-lights', lights):
-                self.lights = lights
-            match ('lp-button-down', coordinate):
-                pass
-            match ('lp-button-up', coordinate):
-                self.start_fade(coordinate)
-            match message is thespian.actors.WakeupMessage:
-                self.fade()
-
-
 class ToggleButton(thespian.actors.Actor):
 
     initialized = False
