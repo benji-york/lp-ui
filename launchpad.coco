@@ -303,7 +303,7 @@ class ToggleButton(thespian.actors.Actor):
 
     def toggle(self):
         self.on ^= True
-        state = ('button-off', 'button-on')[self.on]
+        state = ('toggle-off', 'button-on')[self.on]
         self.subscriptions.send_message((state, self.coordinate))
         # The other subscription messages are about visual indication of
         # state, this message is for anyone tracking the value of the button.
@@ -334,7 +334,7 @@ class ToggleButtonIndicator(thespian.actors.Actor):
     def button_on(self, coordinate):
         self.send(self.indicator, ('button-on', coordinate))
 
-    def button_off(self, coordinate):
+    def toggle_off(self, coordinate):
         self.send(self.indicator, ('button-off', coordinate))
 
     def receiveMessage(self, message, sender):
@@ -345,8 +345,8 @@ class ToggleButtonIndicator(thespian.actors.Actor):
                 self.button_down(coordinate)
             match ('button-on', coordinate):
                 self.button_on(coordinate)
-            match ('button-off', coordinate):
-                self.button_off(coordinate)
+            match ('toggle-off', coordinate):
+                self.toggle_off(coordinate)
 
 
 class ToggleButtonBlinker(thespian.actors.Actor):
@@ -358,7 +358,7 @@ class ToggleButtonBlinker(thespian.actors.Actor):
         self.send(self.lighter, ('button-off', coordinate))
         self.send(self.blinker, ('start-blinking', coordinate))
 
-    def button_off(self, coordinate):
+    def toggle_off(self, coordinate):
         self.send(self.blinker, ('stop-blinking', coordinate))
 
     def receiveMessage(self, message, sender):
@@ -371,8 +371,8 @@ class ToggleButtonBlinker(thespian.actors.Actor):
                 self.button_down(coordinate)
             match ('button-on', coordinate):
                 self.button_on(coordinate)
-            match ('button-off', coordinate):
-                self.button_off(coordinate)
+            match ('toggle-off', coordinate):
+                self.toggle_off(coordinate)
 
 
 class MessagePrinter(thespian.actors.Actor):
