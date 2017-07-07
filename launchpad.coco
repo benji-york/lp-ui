@@ -161,8 +161,9 @@ class LaunchpadLights(thespian.actors.Actor):
 
     def render(self):
         changes = set(self.pixels.items()) - set(self.last_pixels.items())
-        self.send(self.midi_out, ('send', 'sysex', build_lights_commands(changes)))
-        self.last_pixels = dict(self.pixels)
+        if changes:
+            self.send(self.midi_out, ('send', 'sysex', build_lights_commands(changes)))
+            self.last_pixels = dict(self.pixels)
         self.wakeupAfter(datetime.timedelta(milliseconds=10))
 
     def receiveMessage(self, message, sender):
