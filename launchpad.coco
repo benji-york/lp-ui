@@ -19,7 +19,7 @@ class SubscriptionManager(object):
 
 
 class MidiIn(thespian.actors.Actor):
-    
+
     initialized = False
 
     def init(self):
@@ -33,7 +33,7 @@ class MidiIn(thespian.actors.Actor):
         if midi_message is not None:
             self.subscriptions.send_message(('midi-input-event', midi_message))
         self.wakeupAfter(datetime.timedelta(milliseconds=10))
-        
+
     def receiveMessage(self, message, sender):
         if not self.initialized:
             self.init()
@@ -46,23 +46,34 @@ class MidiIn(thespian.actors.Actor):
 
 
 class MidiOut(thespian.actors.Actor):
-    
+
     initialized = False
+    ready = False
 
     def init(self):
         self.initialized = True
         self.port = mido.open_output('Launchpad MK2 MIDI 1')
+        # The Launchpad needs a little time to be ready to accept commands.
+        self.wakeupAfter(datetime.timedelta(milliseconds=500))
 
-    def send(self, kind, data):
+    def send_midi_event(self, kind, data):
         self.port.send(mido.Message(kind).from_bytes(data))
-        
+
     def receiveMessage(self, message, sender):
         if not self.initialized:
             self.init()
 
+        if message `isinstance` thespian.actors.WakeupMessage:
+            self.ready = True
+        elif not self.ready:
+            # The MIDI device isn't ready to go yet, so requeue the message for later.
+            self.send(self.myAddress, message)
+            return
+
         case message:
             match ('send', kind, data):
-                self.send(kind, data)
+                self.send_midi_event(kind, data)
+
 
 data Coordinate(row, column):
     def __add__(self, other):
@@ -100,7 +111,7 @@ class ButtonPressInterpreter(thespian.actors.Actor):
                 event_type = velocity_to_event_type(event.velocity)
                 coordinate = note_to_coordinate(event.note)
                 self.subscriptions.send_message((event_type, coordinate))
-            
+
 
 data Color(red, green, blue)
 
@@ -147,7 +158,7 @@ class LaunchpadLights(thespian.actors.Actor):
 
         # We need to clear any lights currently enabled on the launchpad.
         # If we have not yet been told about the MIDI output agent we are
-        # to send messages to, then we can not initialize yet.  
+        # to send messages to, then we can not initialize yet.
         if self.midi_out is None:
             return
 
@@ -411,7 +422,7 @@ class Fader(thespian.actors.Actor):
         for coordinate in off_coordinates:
             self.subscriptions.send_message(('button-off', coordinate))
 
-        level = len(self.get_on_coordinates()) - 1
+        level = len(on_coordinates) - 1
         self.subscriptions.send_message(('value', level))
 
     def receiveMessage(self, message, sender):
@@ -419,18 +430,18 @@ class Fader(thespian.actors.Actor):
             self.init()
 
         case message:
-            match ('subscribe', subscriber):
-                self.subscriptions.new(subscriber)
-                # New subscribers shouldn have to wait for the value to change.
-                self.update_subscribers()
             match ('set-origin', coordinate):
                 self.origin = coordinate
                 if self.max_coordinate is None:
                     self.max_coordinate = coordinate
             match ('set-vector', vector):
-                # At least one of the vector's dimentions must be zero.
-                assert 0 in vector
+                assert 0 in vector, "At least one of the vector's dimentions must be zero."
                 self.vector = vector
+            match ('subscribe', subscriber):
+                self.subscriptions.new(subscriber)
+                # New subscribers shouldn't have to wait for something to
+                # change to get the current state of affairs.
+                self.update_subscribers()
             match ('lp-button-down', coordinate):
                 self.button_down(coordinate)
             match ('lp-button-up', coordinate):
@@ -500,7 +511,6 @@ def run():
         fader = system.createActor(Fader)
         system.tell(fader, ('set-origin', Coordinate(2, column)))
         system.tell(fader, ('set-vector', Vector(6, 0)))
-        system.tell(fader, ('subscribe', fader_button_indicator))
         system.tell(fader, ('subscribe', fader_button_indicator))
         system.tell(button_press_interpreter, ('subscribe', fader))
 
