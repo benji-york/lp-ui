@@ -52,6 +52,7 @@ class MidiOut(thespian.actors.Actor):
 
     def init(self):
         self.initialized = True
+        self.queued_messages = []
         self.port = mido.open_output('Launchpad MK2 MIDI 1')
         # The Launchpad needs a little time to be ready to accept commands.
         self.wakeupAfter(datetime.timedelta(milliseconds=500))
@@ -59,21 +60,28 @@ class MidiOut(thespian.actors.Actor):
     def send_midi_event(self, kind, data):
         self.port.send(mido.Message(kind).from_bytes(data))
 
+    def handle_message(self, message):
+        case message:
+            match ('send', kind, data):
+                self.send_midi_event(kind, data)
+
     def receiveMessage(self, message, sender):
         if not self.initialized:
             self.init()
 
+        # The only thing that send WakeupMessages is self.init() to give the
+        # Launchpad time to get ready.  If we receive one, that means the time
+        # has elapsed and we assume it is ready to go.
         if message `isinstance` thespian.actors.WakeupMessage:
             self.ready = True
-        elif not self.ready:
-            # XXX does this work or does it create an infinite loop?
-            # The MIDI device isn't ready to go yet, so requeue the message for later.
-            self.send(self.myAddress, message)
-            return
 
-        case message:
-            match ('send', kind, data):
-                self.send_midi_event(kind, data)
+        # Since we have to queue some messages, we'll just queue them all.
+        self.queued_messages.append(message)
+
+        if self.ready:
+            for message in self.queued_messages:
+                self.handle_message(message)
+            del self.queued_messages[:]
 
 
 data Coordinate(row, column):
@@ -152,40 +160,31 @@ CLEAR_LIGHTS = [240, 0, 32, 41, 2, 24, 14, 0, 247]
 
 class LaunchpadLights(thespian.actors.Actor):
     initialized = False
-    midi_out = None
 
     def init(self):
-        self.wakeupAfter(datetime.timedelta(milliseconds=500))
-
-        # We need to clear any lights currently enabled on the launchpad.
-        # If we have not yet been told about the MIDI output agent we are
-        # to send messages to, then we can not initialize yet.
-        if self.midi_out is None:
-            return
-
         self.initialized = True
         self.pixels = {}
         self.last_pixels = {}
         self.send(self.midi_out, ('send', 'sysex', CLEAR_LIGHTS))
+        # Prime the pump.
+        self.wakeupAfter(datetime.timedelta(milliseconds=10))
 
     def set_color(self, coordinate, color):
         self.pixels[coordinate] = color
 
     def render(self):
-        changes = set(self.pixels.items()) - set(self.last_pixels.items())
+        assert self.initialized, 'render called too early'
+        changes = sorted(set(self.pixels.items()) - set(self.last_pixels.items()))
         if changes:
             self.send(self.midi_out, ('send', 'sysex', build_lights_commands(changes)))
             self.last_pixels = dict(self.pixels)
         self.wakeupAfter(datetime.timedelta(milliseconds=10))
 
     def receiveMessage(self, message, sender):
-        if not self.initialized:
-            self.init()
-
         case message:
             match ('set-midi-out', midi_out):
                 self.midi_out = midi_out
-            match 'clear':
+                assert not self.initialized
                 self.init()
             match ('set', coordinate, color):
                 self.set_color(coordinate, color)
@@ -436,7 +435,7 @@ class Fader(thespian.actors.Actor):
                 if self.max_coordinate is None:
                     self.max_coordinate = coordinate
             match ('set-vector', vector):
-                assert 0 in vector, "At least one of the vector's dimentions must be zero."
+                assert 0 in vector, "At least one of the vector's dimensions must be zero."
                 self.vector = vector
             match ('subscribe', subscriber):
                 self.subscriptions.new(subscriber)
@@ -469,7 +468,9 @@ def create_and_tell(system, actor_class, *kv_pairs):
 
 
 def run():
-    system = thespian.actors.ActorSystem()
+    #system = thespian.actors.ActorSystem()
+    #system = thespian.actors.ActorSystem('multiprocQueueBase')
+    system = thespian.actors.ActorSystem('multiprocUDPBase')
     create = (actor_class, *kv_pairs) -> create_and_tell(system, actor_class, *kv_pairs)
     subscribe = (to, subscriber) -> system.tell(to, ('subscribe', subscriber))
 
@@ -513,10 +514,12 @@ def run():
 
     printer = system.createActor(MessagePrinter)
 
+    actors = []
     for column in range(8):
         button = create(ToggleButton, ('set-coordinate', Coordinate(1, column)))
         button `subscribe` toggle_button_blinker
         button_press_interpreter `subscribe` button
+        actors.append(button)
 
     for column in range(8):
         button = create(
@@ -524,14 +527,16 @@ def run():
             ('set-coordinate', Coordinate(0, column)),
             ('subscribe', toggle_button_indicator))
         button_press_interpreter `subscribe` button
+        actors.append(button)
 
     for column in range(8):
         fader = create(
             Fader,
             ('set-origin', Coordinate(2, column)),
-            ('set-vector', Vector(6, 0)),
+            ('set-vector', Vector(5, 0)),
             ('subscribe', fader_button_indicator))
         button_press_interpreter `subscribe` fader
+        actors.append(fader)
 
     try:
         while True:
