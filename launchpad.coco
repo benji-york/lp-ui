@@ -208,51 +208,6 @@ class ButtonIndicator(thespian.actors.Actor):
                 self.button_off(coordinate)
 
 
-class ButtonBlinker(thespian.actors.Actor):
-
-    initialized = False
-    blinking = f{}
-    on_color = DARK_WHITE
-    off_color = BLACK
-    on = True
-
-    def init(self):
-        self.initialized = True
-        self.wakeupAfter(datetime.timedelta())
-
-    def start_blinking(self, coordinate):
-        self.blinking |= f{coordinate}
-
-    def stop_blinking(self, coordinate):
-        self.blinking -= f{coordinate}
-        self.send(self.lights, ('set', coordinate, self.off_color))
-
-    def blink(self):
-        color = [self.off_color, self.on_color][self.on]
-        for coordinate in self.blinking:
-            self.send(self.lights, ('set', coordinate, color))
-        self.on ^= True
-        self.wakeupAfter(datetime.timedelta(milliseconds=500))
-
-    def receiveMessage(self, message, sender):
-        if not self.initialized:
-            self.init()
-
-        case message:
-            match ('set-lights', lights):
-                self.lights = lights
-            match ('set-on-color', color):
-                self.on_color = color
-            match ('set-off-color', color):
-                self.off_color = color
-            match ('start-blinking', coordinate):
-                self.start_blinking(coordinate)
-            match ('stop-blinking', coordinate):
-                self.stop_blinking(coordinate)
-            match message is thespian.actors.WakeupMessage:
-                self.blink()
-
-
 class ButtonFader(thespian.actors.Actor):
 
     initialized = False
@@ -404,9 +359,6 @@ def run():
 
     toggle_button_indicator = system.createActor(ToggleButtonIndicator)
     system.tell(toggle_button_indicator, ('set-indicator', button_indicator))
-
-    button_blinker = system.createActor(ButtonBlinker)
-    system.tell(button_blinker, ('set-lights', lights))
 
     toggle_button_blinker = system.createActor(ToggleButtonBlinker)
     system.tell(toggle_button_blinker, ('set-blinker', button_blinker))
