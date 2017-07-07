@@ -343,6 +343,7 @@ class ToggleButtonBlinker(thespian.actors.Actor):
             match ('toggle-off', coordinate):
                 self.toggle_off(coordinate)
 
+
 def versor(vector):
     if vector.row == 0:
         return Vector(0, 1)
@@ -352,7 +353,7 @@ def versor(vector):
         raise ValueError('only vectors parallel to an axis are suppored')
 
 
-class LevelInput(thespian.actors.Actor):
+class Fader(thespian.actors.Actor):
 
     initialized = False
     on = False
@@ -375,7 +376,7 @@ class LevelInput(thespian.actors.Actor):
 
     def get_on_coordinates(self, target):
         coordinates = []
-        for level, coordinate in enumerate(self.coordinates):
+        for coordinate in self.coordinates:
             coordinates.append(coordinate)
             if coordinate == target:
                 return coordinates
@@ -392,7 +393,7 @@ class LevelInput(thespian.actors.Actor):
             return
 
         on_coordinates = self.get_on_coordinates(coordinate)
-        level = len(on_coordinates)
+        level = len(on_coordinates) - 1
         self.subscriptions.send_message(('value-changed', level))
 
         # Tell subscribers about all the currently-on buttons.
@@ -447,18 +448,28 @@ def run():
     button_press_interpreter = system.createActor(ButtonPressInterpreter)
     system.tell(midi_in, ('subscribe', button_press_interpreter))
 
-    button_indicator = system.createActor(ButtonIndicator)
-    system.tell(button_indicator, ('set-lights', lights))
+    fader_button_indicator = system.createActor(ButtonIndicator)
+    system.tell(fader_button_indicator, ('set-lights', lights))
+
+    mute_button_indicator = system.createActor(ButtonIndicator)
+    system.tell(mute_button_indicator, ('set-lights', lights))
+    system.tell(mute_button_indicator, ('set-on-color', RED))
+
+    solo_button_indicator = system.createActor(ButtonIndicator)
+    system.tell(solo_button_indicator, ('set-lights', lights))
 
     toggle_button_indicator = system.createActor(ToggleButtonIndicator)
-    system.tell(toggle_button_indicator, ('set-indicator', button_indicator))
+    system.tell(toggle_button_indicator, ('set-indicator', mute_button_indicator))
 
-    button_blinker = system.createActor(ButtonBlinker)
-    system.tell(button_blinker, ('set-lights', lights))
+    solo_button_blinker = system.createActor(ButtonBlinker)
+    system.tell(solo_button_blinker, ('set-lights', lights))
+    system.tell(solo_button_blinker, ('set-on-color', GREEN))
 
     toggle_button_blinker = system.createActor(ToggleButtonBlinker)
-    system.tell(toggle_button_blinker, ('set-blinker', button_blinker))
-    system.tell(toggle_button_blinker, ('set-indicator', button_indicator))
+    system.tell(toggle_button_blinker, ('set-blinker', solo_button_blinker))
+    system.tell(toggle_button_blinker, ('set-indicator', solo_button_indicator))
+
+    printer = system.createActor(MessagePrinter)
 
     for column in range(8):
         button = system.createActor(ToggleButton)
@@ -472,14 +483,12 @@ def run():
         system.tell(button, ('subscribe', toggle_button_indicator))
         system.tell(button_press_interpreter, ('subscribe', button))
 
-    printer = system.createActor(MessagePrinter)
-
-    level_input = system.createActor(LevelInput)
-    system.tell(level_input, ('set-origin', Coordinate(7, 2)))
-    system.tell(level_input, ('set-vector', Vector(0, 4)))
-    system.tell(level_input, ('subscribe', printer))
-    system.tell(level_input, ('subscribe', button_indicator))
-    system.tell(button_press_interpreter, ('subscribe', level_input))
+    for column in range(8):
+        fader = system.createActor(Fader)
+        system.tell(fader, ('set-origin', Coordinate(2, column)))
+        system.tell(fader, ('set-vector', Vector(6, 0)))
+        system.tell(fader, ('subscribe', fader_button_indicator))
+        system.tell(button_press_interpreter, ('subscribe',fader))
 
     while True:
         # How do I keep messages flowing without doing this?
