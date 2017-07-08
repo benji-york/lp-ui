@@ -1,3 +1,4 @@
+import collections
 import datetime
 import mido
 import thespian.actors
@@ -197,6 +198,11 @@ class LaunchpadLights(thespian.actors.Actor):
         self.pixels = {}
         self.last_pixels = {}
 
+        # Set all pixels to black.
+        for row in range(8):
+            for column in range(8):
+                self.set_color(Coordinate(row, column), BLACK)
+
     def set_color(self, coordinate, color):
         self.pixels[coordinate] = color
 
@@ -206,16 +212,23 @@ class LaunchpadLights(thespian.actors.Actor):
         if self.enabled:
             changes = sorted(set(self.pixels.items()) - set(self.last_pixels.items()))
             if changes:
-                self.send(self.midi_out, ('send', 'sysex', build_lights_commands(changes)))
+                # Total message size can be too large or it will be
+                # ignored, so batch changes.
+                batch_size = 30
+                while changes:
+                    self.send(
+                        self.midi_out,
+                        ('send', 'sysex', build_lights_commands(changes[:batch_size])))
+                    del changes[:batch_size]
                 self.last_pixels = dict(self.pixels)
             self.wakeupAfter(datetime.timedelta(milliseconds=10))
 
     def disable(self):
         self.enabled = False
-        self.last_pixels = {}
 
     def enable(self):
         self.enabled = True
+        self.last_pixels = {}
         self.render()
 
     def receiveMessage(self, message, sender):
@@ -502,6 +515,31 @@ class Nopper(thespian.actors.Actor):
         pass
 
 
+class CrossTie(thespian.actors.Actor):
+
+    initialized = False
+    source = None
+
+    def init(self):
+        self.initialized = True
+        self.connections = collections.defaultdict(list)
+
+    def receiveMessage(self, message, sender):
+        if not self.initialized:
+            self.init()
+
+        case message:
+            match ('set-source', source):
+                assert self.source is None, 'source can only be set once'
+                self.source = source
+                self.send(self.source, ('subscribe', self.myAddress))
+            match ('connect', (source_message, (destination, destination_message))):
+                self.connections[source_message].append((destination, destination_message))
+            match message if sender is self.source:
+                for translation in self.connections[message]:
+                    self.send(*translation)
+
+
 def create_and_tell(system, actor_class, *kv_pairs):
     actor = system.createActor(actor_class)
     for key, value in kv_pairs:
@@ -536,9 +574,33 @@ def run():
     for gate in gates:
         button_press_interpreter `subscribe` gate
 
-    fader_button_indicator = create(
-        ButtonIndicator,
-        ('set-lights', lights[1]))
+    cross_tie = create(CrossTie,
+        ('set-source', button_press_interpreter),
+        ('connect',
+            (('lp-button-down', Coordinate(0, 8)),
+             (lights[0], 'enable'))),
+        ('connect',
+            (('lp-button-down', Coordinate(0, 8)),
+             (gates[0], 'enable'))),
+        ('connect',
+            (('lp-button-down', Coordinate(0, 8)),
+             (lights[1], 'disable'))),
+        ('connect',
+            (('lp-button-down', Coordinate(0, 8)),
+             (gates[1], 'disable'))),
+        ('connect',
+            (('lp-button-down', Coordinate(1, 8)),
+             (lights[1], 'enable'))),
+        ('connect',
+            (('lp-button-down', Coordinate(1, 8)),
+             (gates[1], 'enable'))),
+        ('connect',
+            (('lp-button-down', Coordinate(1, 8)),
+             (lights[0], 'disable'))),
+        ('connect',
+            (('lp-button-down', Coordinate(1, 8)),
+             (gates[0], 'disable'))),
+        )
 
     mute_button_indicator = create(
         ButtonIndicator,
@@ -563,6 +625,10 @@ def run():
         ('set-blinker', solo_button_blinker),
         ('set-indicator', solo_button_indicator))
 
+    fader_button_indicator = create(
+        ButtonIndicator,
+        ('set-lights', lights[1]))
+
     printer = system.createActor(MessagePrinter)
 
     for column in range(8):
@@ -580,8 +646,8 @@ def run():
     for column in range(8):
         fader = create(
             Fader,
-            ('set-origin', Coordinate(2, column)),
-            ('set-vector', Vector(5, 0)),
+            ('set-origin', Coordinate(0, column)),
+            ('set-vector', Vector(7, 0)),
             ('subscribe', fader_button_indicator))
         gates[1] `subscribe` fader
 
