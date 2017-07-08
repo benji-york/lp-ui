@@ -102,7 +102,11 @@ def velocity_to_event_type(velocity):
     return event_type
 
 
+BUTTON_EVENT_TYPES = ('lp-button-down', 'lp-button-up')
+
+
 class ButtonPressInterpreter(thespian.actors.Actor):
+
     initialized = False
 
     def init(self):
@@ -118,8 +122,33 @@ class ButtonPressInterpreter(thespian.actors.Actor):
                 self.subscriptions.new(subscriber)
             match ('midi-input-event', event):
                 event_type = velocity_to_event_type(event.velocity)
+                assert event_type in BUTTON_EVENT_TYPES, 'unexpected event type'
                 coordinate = note_to_coordinate(event.note)
                 self.subscriptions.send_message((event_type, coordinate))
+
+
+class ButtonPressGate(thespian.actors.Actor):
+
+    initialized = False
+    enabled = False
+
+    def init(self):
+        self.initialized = True
+        self.subscriptions = SubscriptionManager(send_func=self.send)
+
+    def receiveMessage(self, message, sender):
+        if not self.initialized:
+            self.init()
+
+        case message:
+            match ('subscribe', subscriber):
+                self.subscriptions.new(subscriber)
+            match 'enable':
+                self.enabled = True
+            match 'disable':
+                self.enabled = False
+            match message is tuple if message[0] in BUTTON_EVENT_TYPES and self.enabled:
+                self.subscriptions.send_message(message)
 
 
 data Color(red, green, blue)
@@ -159,26 +188,35 @@ CLEAR_LIGHTS = [240, 0, 32, 41, 2, 24, 14, 0, 247]
 
 
 class LaunchpadLights(thespian.actors.Actor):
+
     initialized = False
+    enabled = False
 
     def init(self):
         self.initialized = True
         self.pixels = {}
         self.last_pixels = {}
-        self.send(self.midi_out, ('send', 'sysex', CLEAR_LIGHTS))
-        # Prime the pump.
-        self.wakeupAfter(datetime.timedelta(milliseconds=10))
 
     def set_color(self, coordinate, color):
         self.pixels[coordinate] = color
 
     def render(self):
         assert self.initialized, 'render called too early'
-        changes = sorted(set(self.pixels.items()) - set(self.last_pixels.items()))
-        if changes:
-            self.send(self.midi_out, ('send', 'sysex', build_lights_commands(changes)))
-            self.last_pixels = dict(self.pixels)
-        self.wakeupAfter(datetime.timedelta(milliseconds=10))
+
+        if self.enabled:
+            changes = sorted(set(self.pixels.items()) - set(self.last_pixels.items()))
+            if changes:
+                self.send(self.midi_out, ('send', 'sysex', build_lights_commands(changes)))
+                self.last_pixels = dict(self.pixels)
+            self.wakeupAfter(datetime.timedelta(milliseconds=10))
+
+    def disable(self):
+        self.enabled = False
+        self.last_pixels = {}
+
+    def enable(self):
+        self.enabled = True
+        self.render()
 
     def receiveMessage(self, message, sender):
         case message:
@@ -188,6 +226,10 @@ class LaunchpadLights(thespian.actors.Actor):
                 self.init()
             match ('set', coordinate, color):
                 self.set_color(coordinate, color)
+            match 'enable':
+                self.enable()
+            match 'disable':
+                self.disable()
             match message is thespian.actors.WakeupMessage:
                 self.render()
 
@@ -468,35 +510,44 @@ def create_and_tell(system, actor_class, *kv_pairs):
 
 
 def run():
-    #system = thespian.actors.ActorSystem()
+    system = thespian.actors.ActorSystem()
     #system = thespian.actors.ActorSystem('multiprocQueueBase')
-    system = thespian.actors.ActorSystem('multiprocUDPBase')
+    #system = thespian.actors.ActorSystem('multiprocUDPBase')
     create = (actor_class, *kv_pairs) -> create_and_tell(system, actor_class, *kv_pairs)
     subscribe = (to, subscriber) -> system.tell(to, ('subscribe', subscriber))
 
     nopper = system.createActor(Nopper)
     midi_in = system.createActor(MidiIn)
-    midi_out = system.createActor(MidiOut)
 
-    lights = create(
+    midi_out = system.createActor(MidiOut)
+    system.tell(midi_out, ('send', 'sysex', CLEAR_LIGHTS))
+
+    NUM_PAGES = 2
+
+    lights = [create(
         LaunchpadLights,
         ('set-midi-out', midi_out))
+        for _ in range(NUM_PAGES)]
 
     button_press_interpreter = create(ButtonPressInterpreter)
     subscribe(midi_in, button_press_interpreter)
 
+    gates = [create(ButtonPressGate) for _ in range(NUM_PAGES)]
+    for gate in gates:
+        button_press_interpreter `subscribe` gate
+
     fader_button_indicator = create(
         ButtonIndicator,
-        ('set-lights', lights))
+        ('set-lights', lights[1]))
 
     mute_button_indicator = create(
         ButtonIndicator,
-        ('set-lights', lights),
+        ('set-lights', lights[0]),
         ('set-on-color', RED))
 
     solo_button_indicator = create(
         ButtonIndicator,
-        ('set-lights', lights))
+        ('set-lights', lights[0]))
 
     toggle_button_indicator = create(
         ToggleButtonIndicator,
@@ -504,7 +555,7 @@ def run():
 
     solo_button_blinker = create(
         ButtonBlinker,
-        ('set-lights', lights),
+        ('set-lights', lights[0]),
         ('set-on-color', GREEN))
 
     toggle_button_blinker = create(
@@ -517,14 +568,14 @@ def run():
     for column in range(8):
         button = create(ToggleButton, ('set-coordinate', Coordinate(1, column)))
         button `subscribe` toggle_button_blinker
-        button_press_interpreter `subscribe` button
+        gates[0] `subscribe` button
 
     for column in range(8):
         button = create(
             ToggleButton,
             ('set-coordinate', Coordinate(0, column)),
             ('subscribe', toggle_button_indicator))
-        button_press_interpreter `subscribe` button
+        gates[0] `subscribe` button
 
     for column in range(8):
         fader = create(
@@ -532,7 +583,10 @@ def run():
             ('set-origin', Coordinate(2, column)),
             ('set-vector', Vector(5, 0)),
             ('subscribe', fader_button_indicator))
-        button_press_interpreter `subscribe` fader
+        gates[1] `subscribe` fader
+
+    system.tell(lights[0], 'enable')
+    system.tell(gates[0], 'enable')
 
     try:
         while True:
