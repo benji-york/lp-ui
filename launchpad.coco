@@ -515,6 +515,47 @@ class Nopper(thespian.actors.Actor):
         pass
 
 
+class Pager(thespian.actors.Actor):
+
+    initialized = False
+    current_page = None
+
+    def init(self):
+        self.initialized = True
+        self.lights = {}
+        self.gates = {}
+
+    def activate_page(self, page):
+        if self.current_page is None:
+            self.current_page = 0
+
+        self.send(self.indicator, ('button-off', Coordinate(self.current_page, 8)))
+        self.send(self.lights[self.current_page], 'disable')
+        self.send(self.gates[self.current_page], 'disable')
+        self.current_page = page
+        self.send(self.indicator, ('button-on', Coordinate(self.current_page, 8)))
+        self.send(self.lights[self.current_page], 'enable')
+        self.send(self.gates[self.current_page], 'enable')
+
+    def receiveMessage(self, message, sender):
+        if not self.initialized:
+            self.init()
+
+        case message:
+            match ('set-indicator', indicator):
+                self.indicator = indicator
+            match ('set-lights', lights):
+                self.lights = lights
+            match ('set-gates', gate):
+                self.gates = gate
+            match ('activate-page', page):
+                self.activate_page(page)
+            match ('lp-button-down', coordinate) if coordinate.column == 8:
+                self.send(self.indicator, ('button-pressed', coordinate))
+            match ('lp-button-up', coordinate) if coordinate.column == 8:
+                self.activate_page(coordinate.row)
+
+
 class CrossTie(thespian.actors.Actor):
 
     initialized = False
@@ -560,7 +601,12 @@ def run():
     midi_out = system.createActor(MidiOut)
     system.tell(midi_out, ('send', 'sysex', CLEAR_LIGHTS))
 
-    NUM_PAGES = 2
+    NUM_PAGES = 8
+
+    pager_lights = create(
+        LaunchpadLights,
+        ('set-midi-out', midi_out))
+    system.tell(pager_lights, 'enable')
 
     lights = [create(
         LaunchpadLights,
@@ -574,33 +620,17 @@ def run():
     for gate in gates:
         button_press_interpreter `subscribe` gate
 
-    cross_tie = create(CrossTie,
-        ('set-source', button_press_interpreter),
-        ('connect',
-            (('lp-button-down', Coordinate(0, 8)),
-             (lights[0], 'enable'))),
-        ('connect',
-            (('lp-button-down', Coordinate(0, 8)),
-             (gates[0], 'enable'))),
-        ('connect',
-            (('lp-button-down', Coordinate(0, 8)),
-             (lights[1], 'disable'))),
-        ('connect',
-            (('lp-button-down', Coordinate(0, 8)),
-             (gates[1], 'disable'))),
-        ('connect',
-            (('lp-button-down', Coordinate(1, 8)),
-             (lights[1], 'enable'))),
-        ('connect',
-            (('lp-button-down', Coordinate(1, 8)),
-             (gates[1], 'enable'))),
-        ('connect',
-            (('lp-button-down', Coordinate(1, 8)),
-             (lights[0], 'disable'))),
-        ('connect',
-            (('lp-button-down', Coordinate(1, 8)),
-             (gates[0], 'disable'))),
-        )
+    page_indicator = create(
+        ButtonIndicator,
+        ('set-lights', pager_lights),
+        ('set-on-color', ORANGE))
+
+    pager = create(Pager,
+        ('set-indicator', page_indicator),
+        ('set-lights', lights),
+        ('set-gates', gates),
+        ('activate-page', 0))
+    button_press_interpreter `subscribe` pager
 
     mute_button_indicator = create(
         ButtonIndicator,
@@ -650,9 +680,6 @@ def run():
             ('set-vector', Vector(7, 0)),
             ('subscribe', fader_button_indicator))
         gates[1] `subscribe` fader
-
-    system.tell(lights[0], 'enable')
-    system.tell(gates[0], 'enable')
 
     try:
         while True:
