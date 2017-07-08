@@ -417,9 +417,9 @@ class ToggleButtonBlinker(thespian.actors.Actor):
 
 def versor(vector):
     if vector.row == 0:
-        return Vector(0, 1)
+        return Vector(0, vector.column / abs(vector.column))
     elif vector.column == 0:
-        return Vector(1, 0)
+        return Vector(vector.row / abs(vector.row), 0)
     else:
         raise ValueError('only vectors parallel to an axis are suppored')
 
@@ -487,8 +487,10 @@ class Fader(thespian.actors.Actor):
         case message:
             match ('set-origin', coordinate):
                 self.origin = coordinate
-                if self.max_coordinate is None:
-                    self.max_coordinate = coordinate
+                assert self.max_coordinate is None, 'max coordinate unexpectedly set'
+                # Set the current on button as the origin (i.e, the fader
+                # starts all the way down).
+                self.max_coordinate = coordinate
             match ('set-vector', vector):
                 assert 0 in vector, "At least one of the vector's dimensions must be zero."
                 self.vector = vector
@@ -632,6 +634,8 @@ def run():
         ('activate-page', 0))
     button_press_interpreter `subscribe` pager
 
+    # Page 0
+
     mute_button_indicator = create(
         ButtonIndicator,
         ('set-lights', lights[0]),
@@ -655,12 +659,6 @@ def run():
         ('set-blinker', solo_button_blinker),
         ('set-indicator', solo_button_indicator))
 
-    fader_button_indicator = create(
-        ButtonIndicator,
-        ('set-lights', lights[1]))
-
-    printer = system.createActor(MessagePrinter)
-
     for column in range(8):
         button = create(ToggleButton, ('set-coordinate', Coordinate(1, column)))
         button `subscribe` toggle_button_blinker
@@ -673,6 +671,12 @@ def run():
             ('subscribe', toggle_button_indicator))
         gates[0] `subscribe` button
 
+    # Page 1
+
+    fader_button_indicator = create(
+        ButtonIndicator,
+        ('set-lights', lights[1]))
+
     for column in range(8):
         fader = create(
             Fader,
@@ -680,6 +684,39 @@ def run():
             ('set-vector', Vector(7, 0)),
             ('subscribe', fader_button_indicator))
         gates[1] `subscribe` fader
+
+    # Page 2
+
+    fader_button_indicator = create(
+        ButtonIndicator,
+        ('set-lights', lights[2]),
+        ('set-on-color', BLUE),
+        ('set-pressed-color', GREEN))
+
+    for column in range(8):
+        fader = create(
+            Fader,
+            ('set-origin', Coordinate(3, column)),
+            ('set-vector', Vector(-3, 0)),
+            ('subscribe', fader_button_indicator))
+        gates[2] `subscribe` fader
+
+    fader_button_indicator = create(
+        ButtonIndicator,
+        ('set-lights', lights[2]),
+        ('set-on-color', GREEN))
+
+    for column in range(8):
+        fader = create(
+            Fader,
+            ('set-origin', Coordinate(4, column)),
+            ('set-vector', Vector(3, 0)),
+            ('subscribe', fader_button_indicator))
+        gates[2] `subscribe` fader
+
+    # End of pages
+
+    printer = system.createActor(MessagePrinter)
 
     try:
         while True:
