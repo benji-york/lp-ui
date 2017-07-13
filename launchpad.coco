@@ -513,12 +513,6 @@ class MessagePrinter(thespian.actors.Actor):
         print(message)
 
 
-class Nopper(thespian.actors.Actor):
-
-    def receiveMessage(self, message, sender):
-        pass
-
-
 class Pager(thespian.actors.Actor):
 
     initialized = False
@@ -599,7 +593,6 @@ def run():
     create = (actor_class, *kv_pairs) -> create_and_tell(system, actor_class, *kv_pairs)
     subscribe = (to, subscriber) -> system.tell(to, ('subscribe', subscriber))
 
-    nopper = system.createActor(Nopper)
     midi_in = system.createActor(MidiIn)
 
     midi_out = system.createActor(MidiOut)
