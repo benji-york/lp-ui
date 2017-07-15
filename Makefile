@@ -10,10 +10,10 @@ sysdeps:  # run with sudo
 
 .PHONY: ve deps
 deps:
-	ve/bin/pip install coconut
-	ve/bin/pip install mido
-	ve/bin/pip install python-rtmidi==1.1.0
-	ve/bin/pip install thespian
+	ve/bin/pip install coconut  # functional programming addons to Python
+	ve/bin/pip install python-rtmidi==1.1.0 mido  # MIDI IO
+	ve/bin/pip install thespian  # actor system
+	ve/bin/pip install green  # testing
 
 
 .PHONY: clean-ve
@@ -35,5 +35,15 @@ ve:
 	ls ve || virtualenv ve -p python3 --system-site-packages --clear
 
 
+.PHONY: compile
+compile:
+	coconut --keep-lines --line-numbers --target 35 .
+
+
+.PHONY:
+test:
+	green
+
+
 .PHONY: build
-build: ve deps
+build: ve deps compile
