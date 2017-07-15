@@ -22,10 +22,11 @@ class SubscriptionManager(object):
 class MidiIn(thespian.actors.Actor):
 
     initialized = False
+    open_input_port = mido.open_input
 
     def init(self):
         self.initialized = True
-        self.port = mido.open_input('Launchpad MK2 MIDI 1')
+        self.port = self.open_input_port('Launchpad MK2 MIDI 1')
         self.subscriptions = SubscriptionManager(send_func=self.send)
         self.wakeupAfter(datetime.timedelta())
 
