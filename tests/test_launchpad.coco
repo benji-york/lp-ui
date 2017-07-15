@@ -1,0 +1,105 @@
+import launchpad
+import thespian.actors
+import unittest 
+
+
+class InitializationMixin(object):
+    """Tests for the MidiIn actor."""
+
+    def test_initialization_needed(self):
+        # When the actor is created, it is unititialized
+        self.assertFalse(self.actor.initialized)
+
+    def test_initialization_on_first_message(self):
+        # After the first message is processed, the actor is initialized.
+        assert self.actor.initialized == False, 'unexpected initialization'
+        self.actor.receiveMessage('nop', sender=None)
+        self.assertTrue(self.actor.initialized)
+
+
+class FauxMidiPort(object):
+
+    name = None
+    polled = False
+
+    def __init__(self, name):
+        self.name = name
+
+    def poll(self):
+        self.polled = True
+        return None
+
+
+class FauxRef(object):
+
+    def __init__(self):
+        self.wakeups = []
+
+    def wakeupAfter(self, timePeriod=None):
+        self.wakeups.append(timePeriod)
+
+
+def faux_create(actor_class):
+    actor = actor_class()
+    actor._myRef = FauxRef()
+    return actor
+
+
+class WakeupsForeverMixin(object):
+    """Does the actor keep a pending wakeup message forever?"""
+
+
+    def test_init_wakeup(self):
+        # Once initialized, the actor fires a wakeupAfter() so as to keep events pumping.
+        wakeups = self.actor._myRef.wakeups
+        assert wakeups == [], 'unexpected early wakeups'
+        self.actor.receiveMessage('nop', sender=None)
+        self.assertEqual(len(wakeups), 1)
+
+    def test_next_wakeup(self):
+        # When sent a WakeupMessage, another will be queued.
+        wakeups = self.actor._myRef.wakeups
+        assert wakeups == [], 'unexpected early wakeups'
+        # Since the actor isn't yet initialized and initialization creates a
+        # wakeup, we have to intiialize it and then clear the list of wakeups.
+        self.actor.receiveMessage('nop', sender=None)
+        assert len(wakeups) == 1, 'init did not create wakeup'
+        del wakeups[:]
+
+        # Now we're ready for the real test: does the actor create a new wakeup
+        # if it recieves one.
+        self.actor.receiveMessage(thespian.actors.WakeupMessage(0), sender=None)
+        self.assertEqual(len(wakeups), 1)
+
+
+def init_actor(func):
+    """Decorator to trigger actor initialzation by sending it a NO-OP message.
+    """
+
+    def wrapper(self):
+        self.actor.receiveMessage('nop', sender=None)
+        assert self.actor.initialized == True, 'failed to initialize actor'
+        return func(self)
+
+    return wrapper
+
+
+class TestMidiIn(unittest.TestCase, InitializationMixin, WakeupsForeverMixin):
+    """Tests for the MidiIn actor."""
+
+    def setUp(self):
+        self.actor = faux_create(launchpad.MidiIn)
+        self.actor.open_input_port = FauxMidiPort
+
+    @init_actor
+    def test_midi_port_name(self):
+        # The correct name is used when opening the MIDI port.
+        self.assertEqual(self.actor.port.name, 'Launchpad MK2 MIDI 1')
+
+    @init_actor
+    def test_wakeups_poll(self):
+        # Every time a wakeup message is received by the actor, the MIDI input
+        # port is polled.
+        self.actor.open_input_port.polled = False
+        self.actor.receiveMessage(thespian.actors.WakeupMessage(0), sender=None)
+        self.assertTrue(self.actor.port.polled)

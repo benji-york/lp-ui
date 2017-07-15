@@ -1,3 +1,4 @@
 ve/
 __coconut__.py
 launchpad.py
+tests/test_launchpad.py
