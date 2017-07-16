@@ -1,4 +1,6 @@
-ve/
+.coverage
 __coconut__.py
 launchpad.py
+tests/helpers.py
 tests/test_launchpad.py
+ve/
