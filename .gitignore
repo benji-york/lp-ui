@@ -3,4 +3,5 @@ __coconut__.py
 launchpad.py
 tests/helpers.py
 tests/test_launchpad.py
+tests/test_midi_out.py
 ve/
