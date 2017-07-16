@@ -13,7 +13,7 @@ deps:
 	ve/bin/pip install coconut  # functional programming addons to Python
 	ve/bin/pip install python-rtmidi==1.1.0 mido  # MIDI IO
 	ve/bin/pip install thespian  # actor system
-	ve/bin/pip install green  # testing
+	ve/bin/pip install coverage green  # testing
 
 
 .PHONY: clean-ve
