@@ -5,7 +5,6 @@ import thespian.actors
 import unittest
 
 
-
 class FauxMidiPort(object):
 
     name = None
@@ -17,7 +16,6 @@ class FauxMidiPort(object):
     def poll(self):
         self.polled = True
         return None
-
 
 
 class TestMidiIn(unittest.TestCase, InitializationMixin, WakeupsForeverMixin):
