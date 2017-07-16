@@ -1,0 +1,26 @@
+"""This module contains tests for miscellaneous small things."""
+
+from launchpad import note_to_coordinate, Coordinate
+import unittest
+
+
+class TestNoteToCoordinate(unittest.TestCase):
+    """Tests for the note_to_coordinate() function."""
+
+    def test_bottom_left(self):
+        # The bottom-left button on the Launchpad is MIDI note 11.
+        self.assertEqual(note_to_coordinate(11), Coordinate(0, 0))
+
+    def test_top_right(self):
+        # The top-right button on the Launchpad is MIDI note 88.
+        self.assertEqual(note_to_coordinate(88), Coordinate(7, 7))
+
+    def test_right_extra_buttons(self):
+        # The row of round buttons on the right are notes 91 through 98.
+        self.assertEqual(note_to_coordinate(19), Coordinate(0, 8))
+        self.assertEqual(note_to_coordinate(89), Coordinate(7, 8))
+
+    def test_top_extra_buttons(self):
+        # The row of round buttons on the top are notes 104 through 111.
+        self.assertEqual(note_to_coordinate(104), Coordinate(9, 0))
+        self.assertEqual(note_to_coordinate(111), Coordinate(9, 7))

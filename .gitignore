@@ -4,6 +4,7 @@ launchpad.py
 tests/helpers.py
 tests/test_coordianate.py
 tests/test_launchpad.py
+tests/test_launchpad_misc.py
 tests/test_midi_in.py
 tests/test_midi_out.py
 tests/test_subscription_manager.py

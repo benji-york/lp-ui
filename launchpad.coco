@@ -96,6 +96,9 @@ data Vector(row, column)
 
 
 def note_to_coordinate(note):
+    # The topmost row of buttons is numbered slightly differently.  Normalize them.
+    if note >= 104:
+        note -= 3
     return Coordinate(row=note // 10 - 1, column=note % 10 - 1)
 
 
