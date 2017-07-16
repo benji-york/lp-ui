@@ -4,4 +4,5 @@ launchpad.py
 tests/helpers.py
 tests/test_launchpad.py
 tests/test_midi_out.py
+tests/test_subscription_manager.py
 ve/

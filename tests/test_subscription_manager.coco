@@ -1,0 +1,24 @@
+import launchpad
+import unittest
+
+
+class TestSubscriptionManager(unittest.TestCase):
+    """Tests for the SubscriptionManager class."""
+
+    def test_new_subscriber(self):
+        # New subscribers can be added.
+        subscriptions = launchpad.SubscriptionManager(send_func=None)
+        subscriptions.new('subscriber')
+        self.assertEqual(subscriptions.subscribers, ['subscriber'])
+
+    def test_send_func(self):
+        # Upon construction, a function that will actuall send the messages is provided.
+        sent = []
+        def send_func(subscriber, message):
+            sent.append((subscriber, message))
+
+        subscriptions = launchpad.SubscriptionManager(send_func=send_func)
+        subscriptions.new('subscriber')
+        subscriptions.send_message('message')
+        self.assertEqual(sent, [('subscriber', 'message')])
+
