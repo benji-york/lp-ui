@@ -1,0 +1,71 @@
+from .helpers import InitializationMixin, FauxRef
+from .helpers import faux_create, init_actor
+import datetime
+import launchpad
+import thespian.actors
+import unittest
+
+
+class FauxMidiPort(object):
+
+    name = None
+    polled = False
+
+    def __init__(self, name):
+        self.name = name
+        self.sent = []
+
+    def send(self, message):
+        self.sent.append(message)
+        return None
+
+
+class TestMidiOut(unittest.TestCase, InitializationMixin):
+    """Tests for the MidiOut actor."""
+
+    def setUp(self):
+        self.actor = faux_create(launchpad.MidiOut)
+        self.actor.open_output_port = FauxMidiPort
+
+    @init_actor
+    def test_midi_port_name(self):
+        # The correct name is used when opening the MIDI port.
+        self.assertEqual(self.actor.port.name, 'Launchpad MK2 MIDI 1')
+
+    @init_actor
+    def test_messages_initially_delayed(self):
+        # The MIDI output port takes a few milliseconds to be ready to accept
+        # messages.  Until then, messages are queued.
+        
+        # The init_actor decorator has sent a message that has been queued.
+        assert self.actor.queued_messages == ['nop'], 'unexpected queued messages'
+        # If we send another message, it will be queued too.
+        self.actor.receiveMessage('another', sender=None)
+        self.assertEqual(self.actor.queued_messages[-1], 'another')
+
+    @init_actor
+    def test_messages_processed_after_wakeup(self):
+        # The actor uses the WakeupMessage to trigger processing of previously
+        # queued messages.
+        
+        # The init_actor decorator has sent a message that has been queued.
+        assert self.actor.queued_messages == ['nop'], 'unexpected queued messages'
+        # If we send a WakeupMessage, then the queue is processed.
+        self.actor.receiveMessage(
+            thespian.actors.WakeupMessage(datetime.timedelta()), sender=None)
+        self.assertEqual(self.actor.queued_messages, [])
+
+    @init_actor
+    def test_sending_midi_messages(self):
+        # Once the actor is ready, it can send MIDI messages to the MIDI outpu port.
+        
+        # Get the actor into a running state.
+        self.actor.receiveMessage(
+            thespian.actors.WakeupMessage(datetime.timedelta()), sender=None)
+        assert self.actor.ready, 'the actor should have been ready'
+
+        # Now, if we send it a "send" message, it will relay that message to
+        # the MIDI port.
+        assert len(self.actor.port.sent) == 0, 'MIDI message prematurely sent'
+        self.actor.receiveMessage(('send', 'sysex', [240, 247]), sender=None)
+        self.assertEqual(len(self.actor.port.sent), 1)
