@@ -1,0 +1,26 @@
+from launchpad import Coordinate, Vector
+import unittest
+
+
+class TestSubscriptionManager(unittest.TestCase):
+    """Tests for the SubscriptionManager class."""
+
+    def test_adding_to_zero_coordinates(self):
+        # Adding something to a zero Coordinate results in the value added.
+        self.assertEqual(
+            Coordinate(0, 0) + Coordinate(1, 2), 
+            Coordinate(1, 2))
+
+    def test_adding_nonzero_coordinates(self):
+        # Adding two non-zero coordinates results in a Coordinate with the
+        # rows summed and the columns summed.
+        self.assertEqual(
+            Coordinate(3, 7) + Coordinate(11, 13), 
+            Coordinate(14, 20))
+
+    def test_adding_coordinate_and_vector(self):
+        # It is permissible to add a Vector to a Coordinate and results in the
+        # same thing as having added two Coordinates.
+        self.assertEqual(
+            Coordinate(3, 7) + Vector(11, 13), 
+            Coordinate(14, 20))
