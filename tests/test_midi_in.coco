@@ -10,12 +10,16 @@ class FauxMidiPort(object):
     name = None
     polled = False
 
-    def __init__(self, name):
+    def __init__(self, name, messages=()):
         self.name = name
+        self.messages = messages
 
     def poll(self):
         self.polled = True
-        return None
+        if self.messages:
+            return self.messages.pop(0)
+        else:
+            return None
 
 
 class TestMidiIn(unittest.TestCase, InitializationMixin, WakeupsForeverMixin):
@@ -34,6 +38,24 @@ class TestMidiIn(unittest.TestCase, InitializationMixin, WakeupsForeverMixin):
     def test_wakeups_poll(self):
         # Every time a wakeup message is received by the actor, the MIDI input
         # port is polled.
-        self.actor.open_input_port.polled = False
         self.actor.receiveMessage(thespian.actors.WakeupMessage(0), sender=None)
         self.assertTrue(self.actor.port.polled)
+
+    @init_actor
+    def test_subscriptions(self):
+        # When a MIDI message is available at the input port, it will be sent
+        # to subscribers when the next wakeup happens.
+        self.actor.port.messages = ['message-1', 'message-2']
+        self.actor.receiveMessage(('subscribe', 'fake'), sender=None)
+        # Now that we have a subscriber and a pending MIDI input, a wakeup
+        # will send the message to all subscribers.
+        self.actor.receiveMessage(thespian.actors.WakeupMessage(0), sender=None)
+        self.assertEqual(
+                self.actor.sent_messages,
+                [('fake', ('midi-input-event', 'message-1'))])
+        # A second wakeup will send the next message.
+        self.actor.receiveMessage(thespian.actors.WakeupMessage(0), sender=None)
+        self.assertEqual(
+                self.actor.sent_messages,
+                [('fake', ('midi-input-event', 'message-1')),
+                 ('fake', ('midi-input-event', 'message-2'))])

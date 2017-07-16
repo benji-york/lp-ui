@@ -26,6 +26,8 @@ class FauxRef(object):
 def faux_create(actor_class):
     actor = actor_class()
     actor._myRef = FauxRef()
+    actor.sent_messages = []
+    actor.send = (*args) -> actor.sent_messages.append(args)
     return actor
 
 
