@@ -1,6 +1,6 @@
 """This module contains tests for miscellaneous small things."""
 
-from launchpad import note_to_coordinate, Coordinate
+from launchpad import note_to_coordinate, Coordinate, velocity_to_event_type
 import unittest
 
 
@@ -24,3 +24,15 @@ class TestNoteToCoordinate(unittest.TestCase):
         # The row of round buttons on the top are notes 104 through 111.
         self.assertEqual(note_to_coordinate(104), Coordinate(9, 0))
         self.assertEqual(note_to_coordinate(111), Coordinate(9, 7))
+
+
+class TestVelocityToEventType(unittest.TestCase):
+    """Tests for the velocity_to_event_type() function."""
+
+    def test_zero_velocity(self):
+        # When the velocity of a MIDI note is zero, the button is being released.
+        self.assertEqual(velocity_to_event_type(0), 'lp-button-up')
+
+    def test_nonzero_velocity(self):
+        # When the velocity of a MIDI note is non-zero, the button is being pressed.
+        self.assertEqual(velocity_to_event_type(99), 'lp-button-down')
