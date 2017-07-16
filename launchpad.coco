@@ -51,11 +51,12 @@ class MidiOut(thespian.actors.Actor):
 
     initialized = False
     ready = False
+    open_output_port = mido.open_output
 
     def init(self):
         self.initialized = True
         self.queued_messages = []
-        self.port = mido.open_output('Launchpad MK2 MIDI 1')
+        self.port = self.open_output_port('Launchpad MK2 MIDI 1')
         # The Launchpad needs a little time to be ready to accept commands.
         self.wakeupAfter(datetime.timedelta(milliseconds=500))
 
