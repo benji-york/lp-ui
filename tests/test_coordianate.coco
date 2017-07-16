@@ -2,8 +2,8 @@ from launchpad import Coordinate, Vector
 import unittest
 
 
-class TestSubscriptionManager(unittest.TestCase):
-    """Tests for the SubscriptionManager class."""
+class TestCoordinate(unittest.TestCase):
+    """Tests for the Coordinate data type."""
 
     def test_adding_to_zero_coordinates(self):
         # Adding something to a zero Coordinate results in the value added.
