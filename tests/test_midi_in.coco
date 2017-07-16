@@ -46,16 +46,16 @@ class TestMidiIn(unittest.TestCase, InitializationMixin, WakeupsForeverMixin):
         # When a MIDI message is available at the input port, it will be sent
         # to subscribers when the next wakeup happens.
         self.actor.port.messages = ['message-1', 'message-2']
-        self.actor.receiveMessage(('subscribe', 'fake'), sender=None)
+        self.actor.receiveMessage(('subscribe', 'subscriber'), sender=None)
         # Now that we have a subscriber and a pending MIDI input, a wakeup
         # will send the message to all subscribers.
         self.actor.receiveMessage(thespian.actors.WakeupMessage(0), sender=None)
         self.assertEqual(
                 self.actor.sent_messages,
-                [('fake', ('midi-input-event', 'message-1'))])
+                [('subscriber', ('midi-input-event', 'message-1'))])
         # A second wakeup will send the next message.
         self.actor.receiveMessage(thespian.actors.WakeupMessage(0), sender=None)
         self.assertEqual(
                 self.actor.sent_messages,
-                [('fake', ('midi-input-event', 'message-1')),
-                 ('fake', ('midi-input-event', 'message-2'))])
+                [('subscriber', ('midi-input-event', 'message-1')),
+                 ('subscriber', ('midi-input-event', 'message-2'))])
