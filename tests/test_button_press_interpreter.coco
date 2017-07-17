@@ -1,0 +1,29 @@
+from .helpers import InitializationMixin, HandlesSubscriptionsMixin
+from .helpers import faux_create, init_actor
+from launchpad import Coordinate
+import datetime
+import launchpad
+import thespian.actors
+import unittest
+
+
+data FauxEvent(note, velocity)
+
+
+class TestButtonPressInterpreter(unittest.TestCase, InitializationMixin,
+        HandlesSubscriptionsMixin):
+    """Tests for the ButtonPressInterpreter actor."""
+
+    def setUp(self):
+        self.actor = faux_create(launchpad.ButtonPressInterpreter)
+
+    @init_actor
+    def test_button_down_propegated(self):
+        # When MIDI notes representing button presses happen, subscribers will
+        # get lp-button-down events.
+        self.actor.receiveMessage(('subscribe', 'subscriber'), sender=None)
+        self.actor.receiveMessage(
+                ('midi-input-event', FauxEvent(note=33, velocity=0)), sender=None)
+        self.assertEqual(
+                self.actor.sent_messages,
+                [('subscriber', ('lp-button-up', Coordinate(row=2, column=2)))])

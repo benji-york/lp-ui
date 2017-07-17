@@ -2,6 +2,7 @@
 __coconut__.py
 launchpad.py
 tests/helpers.py
+tests/test_button_press_interpreter.py
 tests/test_coordianate.py
 tests/test_launchpad.py
 tests/test_launchpad_misc.py
