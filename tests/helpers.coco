@@ -68,3 +68,13 @@ def init_actor(func):
 
     return wrapper
 
+
+class HandlesSubscriptionsMixin(object):
+    """Does the actor handle subscription messages?"""
+
+    @init_actor
+    def test_subscription_message(self):
+        # If a message of the form ('subscribe', actor_reference) is received,
+        # the target actor will be added to the subscription manager.
+        self.actor.receiveMessage(('subscribe', 'actor'), sender=None)
+        self.assertEqual(self.actor.subscriptions.subscribers, ['actor'])
