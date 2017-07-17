@@ -1,4 +1,5 @@
 from .helpers import InitializationMixin, WakeupsForeverMixin, FauxRef
+from .helpers import HandlesSubscriptionsMixin
 from .helpers import faux_create, init_actor
 import launchpad
 import thespian.actors
@@ -22,7 +23,8 @@ class FauxMidiPort(object):
             return None
 
 
-class TestMidiIn(unittest.TestCase, InitializationMixin, WakeupsForeverMixin):
+class TestMidiIn(unittest.TestCase, InitializationMixin, HandlesSubscriptionsMixin,
+        WakeupsForeverMixin):
     """Tests for the MidiIn actor."""
 
     def setUp(self):
